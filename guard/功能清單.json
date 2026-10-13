@@ -1,39 +1,180 @@
 {
   "說明": "每一項是一個已完成的功能：檔案裡一定要找得到這段文字。GitHub 每次上傳都會自動檢查，少了任何一項就會亮紅燈，避免有人拿舊檔案蓋掉新功能。新增功能時，把它加進這份清單。",
   "功能": [
-    { "名稱": "六張點班表", "檔案": "js/forms.js", "關鍵字": "export const FORMS" },
-    { "名稱": "急救車管制藥 Dormicum", "檔案": "js/forms.js", "關鍵字": "Dormicum（四級）" },
-    { "名稱": "第二組點班人名單", "檔案": "js/forms.js", "關鍵字": "蔡玟純" },
-    { "名稱": "雲端共用紀錄（Firebase）", "檔案": "js/store.js", "關鍵字": "yangming-checklist.firebaseapp.com" },
-    { "名稱": "開頁自動匿名登入", "檔案": "js/store.js", "關鍵字": "signInAnonymously(auth)" },
-    { "名稱": "空的時候自動放示範資料", "檔案": "js/store.js", "關鍵字": "export async function seedDemo" },
-    { "名稱": "擁有者清掉重來", "檔案": "js/store.js", "關鍵字": "export async function resetDemo" },
-    { "名稱": "護理師／護理長切換", "檔案": "js/app.js", "關鍵字": "function setRole" },
-    { "名稱": "試用版權限說明", "檔案": "js/app.js", "關鍵字": "正式版只有護理長和指定主管能改備品基本量、調整平面圖位置" },
-    { "名稱": "點班總覽所有人都能看", "檔案": "js/app.js", "關鍵字": "if(TAB==='overview') v.innerHTML=overviewView();" },
-    { "名稱": "誰正在點班", "檔案": "js/app.js", "關鍵字": "function busyBy" },
-    { "名稱": "正在點班存雲端", "檔案": "js/store.js", "關鍵字": "export const markActive" },
-    { "名稱": "護理長功能上鎖畫面", "檔案": "js/app.js", "關鍵字": "function lockedView" },
-    { "名稱": "異常必填原因", "檔案": "js/app.js", "關鍵字": "原因（必填）" },
-    { "名稱": "管制藥自動算帳", "檔案": "js/app.js", "關鍵字": "結存跟帳對不上" },
-    { "名稱": "護理長月總覽格子", "檔案": "js/app.js", "關鍵字": "function gridHTML" },
-    { "名稱": "選點班人智慧搜尋", "檔案": "js/app.js", "關鍵字": "function renderNurses" },
-    { "名稱": "首頁", "檔案": "index.html", "關鍵字": "js/app.js" },
-    { "名稱": "首頁清單／平面圖切換", "檔案": "js/app.js", "關鍵字": "data-act=\"homemode\"" },
-    { "名稱": "平面圖畫面", "檔案": "js/floor.js", "關鍵字": "export function floorHTML" },
-    { "名稱": "平面圖拖動圖示", "檔案": "js/floor.js", "關鍵字": "export function bindFloorDrag" },
-    { "名稱": "平面圖位置存雲端", "檔案": "js/store.js", "關鍵字": "export const saveFloor" },
-    { "名稱": "平面圖圖片", "檔案": "js/floor.js", "關鍵字": "img/a051-floor.jpg" },
-    { "名稱": "送出時存每一項數量", "檔案": "js/app.js", "關鍵字": "vals:buildVals(f)" },
-    { "名稱": "顯示這次點的數量表", "檔案": "js/app.js", "關鍵字": "function valsTable" },
-    { "名稱": "舊紀錄反推數量", "檔案": "js/app.js", "關鍵字": "function valsOf" },
-    { "名稱": "首頁掃碼點班鈕", "檔案": "js/app.js", "關鍵字": "data-act=\"scan\"" },
-    { "名稱": "QR 網址直接開表", "檔案": "js/app.js", "關鍵字": "function routeFromHash" },
-    { "名稱": "相機掃碼", "檔案": "js/qr.js", "關鍵字": "export async function startScan" },
-    { "名稱": "QR 貼紙產生", "檔案": "js/qr.js", "關鍵字": "export async function stickersHTML" },
-    { "名稱": "第一次打開跳使用說明", "檔案": "js/app.js", "關鍵字": "if(!localGet(GUIDE_KEY)" },
-    { "名稱": "使用說明內容含平面圖", "檔案": "js/guide.js", "關鍵字": "調整位置" },
-    { "名稱": "右上角說明鈕", "檔案": "js/app.js", "關鍵字": "data-act=\"guide-open\"" },
-    { "名稱": "掃碼畫面", "檔案": "index.html", "關鍵字": "id=\"scanvideo\"" }
+    {
+      "名稱": "六張點班表",
+      "檔案": "js/forms.js",
+      "關鍵字": "export const FORMS"
+    },
+    {
+      "名稱": "急救車管制藥 Dormicum",
+      "檔案": "js/forms.js",
+      "關鍵字": "Dormicum（四級）"
+    },
+    {
+      "名稱": "第二組點班人名單",
+      "檔案": "js/forms.js",
+      "關鍵字": "蔡玟純"
+    },
+    {
+      "名稱": "雲端共用紀錄（Firebase）",
+      "檔案": "js/store.js",
+      "關鍵字": "yangming-checklist.firebaseapp.com"
+    },
+    {
+      "名稱": "開頁自動匿名登入",
+      "檔案": "js/store.js",
+      "關鍵字": "signInAnonymously(auth)"
+    },
+    {
+      "名稱": "空的時候自動放示範資料",
+      "檔案": "js/store.js",
+      "關鍵字": "export async function seedDemo"
+    },
+    {
+      "名稱": "擁有者清掉重來",
+      "檔案": "js/store.js",
+      "關鍵字": "export async function resetDemo"
+    },
+    {
+      "名稱": "護理師／護理長切換",
+      "檔案": "js/app.js",
+      "關鍵字": "function setRole"
+    },
+    {
+      "名稱": "試用版權限說明",
+      "檔案": "js/app.js",
+      "關鍵字": "正式版只有護理長和指定主管能改備品基本量、調整平面圖位置"
+    },
+    {
+      "名稱": "點班總覽所有人都能看",
+      "檔案": "js/app.js",
+      "關鍵字": "if(TAB==='overview') v.innerHTML=overviewView();"
+    },
+    {
+      "名稱": "誰正在點班",
+      "檔案": "js/app.js",
+      "關鍵字": "function busyBy"
+    },
+    {
+      "名稱": "正在點班存雲端",
+      "檔案": "js/store.js",
+      "關鍵字": "export const markActive"
+    },
+    {
+      "名稱": "護理長功能上鎖畫面",
+      "檔案": "js/app.js",
+      "關鍵字": "function lockedView"
+    },
+    {
+      "名稱": "異常必填原因",
+      "檔案": "js/app.js",
+      "關鍵字": "原因（必填）"
+    },
+    {
+      "名稱": "管制藥自動算帳",
+      "檔案": "js/app.js",
+      "關鍵字": "結存跟帳對不上"
+    },
+    {
+      "名稱": "護理長月總覽格子",
+      "檔案": "js/app.js",
+      "關鍵字": "function gridHTML"
+    },
+    {
+      "名稱": "選點班人智慧搜尋",
+      "檔案": "js/app.js",
+      "關鍵字": "function renderNurses"
+    },
+    {
+      "名稱": "首頁",
+      "檔案": "index.html",
+      "關鍵字": "js/app.js"
+    },
+    {
+      "名稱": "首頁清單／平面圖切換",
+      "檔案": "js/app.js",
+      "關鍵字": "data-act=\"homemode\""
+    },
+    {
+      "名稱": "平面圖畫面",
+      "檔案": "js/floor.js",
+      "關鍵字": "export function floorHTML"
+    },
+    {
+      "名稱": "平面圖拖動圖示",
+      "檔案": "js/floor.js",
+      "關鍵字": "export function bindFloorDrag"
+    },
+    {
+      "名稱": "平面圖位置存雲端",
+      "檔案": "js/store.js",
+      "關鍵字": "export const saveFloor"
+    },
+    {
+      "名稱": "平面圖圖片",
+      "檔案": "js/floor.js",
+      "關鍵字": "img/a051-floor.jpg"
+    },
+    {
+      "名稱": "送出時存每一項數量",
+      "檔案": "js/app.js",
+      "關鍵字": "vals:buildVals(f)"
+    },
+    {
+      "名稱": "顯示這次點的數量表",
+      "檔案": "js/app.js",
+      "關鍵字": "function valsTable"
+    },
+    {
+      "名稱": "舊紀錄反推數量",
+      "檔案": "js/app.js",
+      "關鍵字": "function valsOf"
+    },
+    {
+      "名稱": "首頁掃碼點班鈕",
+      "檔案": "js/app.js",
+      "關鍵字": "data-act=\"scan\""
+    },
+    {
+      "名稱": "QR 網址直接開表",
+      "檔案": "js/app.js",
+      "關鍵字": "function routeFromHash"
+    },
+    {
+      "名稱": "相機掃碼",
+      "檔案": "js/qr.js",
+      "關鍵字": "export async function startScan"
+    },
+    {
+      "名稱": "QR 貼紙產生",
+      "檔案": "js/qr.js",
+      "關鍵字": "export async function stickersHTML"
+    },
+    {
+      "名稱": "第一次打開跳使用說明",
+      "檔案": "js/app.js",
+      "關鍵字": "if(!localGet(GUIDE_KEY)"
+    },
+    {
+      "名稱": "使用說明內容含平面圖",
+      "檔案": "js/guide.js",
+      "關鍵字": "調整位置"
+    },
+    {
+      "名稱": "右上角說明鈕",
+      "檔案": "js/app.js",
+      "關鍵字": "data-act=\"guide-open\""
+    },
+    {
+      "名稱": "掃碼畫面",
+      "檔案": "index.html",
+      "關鍵字": "id=\"scanvideo\""
+    },
+    {
+      "名稱": "新版自動更新（版本檢查）",
+      "檔案": "index.html",
+      "關鍵字": "version.json?t="
+    }
   ]
 }

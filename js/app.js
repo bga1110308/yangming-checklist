@@ -1,9 +1,9 @@
 /* 畫面程式：首頁、點班表單、點班總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
-import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js';
-import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout } from './store.js';
-import { floorHTML, bindFloorDrag } from './floor.js';
-import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js';
-import { guideHTML, GUIDE_KEY } from './guide.js';
+import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js?v=20261013110156';
+import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout } from './store.js?v=20261013110156';
+import { floorHTML, bindFloorDrag } from './floor.js?v=20261013110156';
+import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js?v=20261013110156';
+import { guideHTML, GUIDE_KEY } from './guide.js?v=20261013110156';
 
 /* ===== 圖示：直接寫在檔案裡，不靠外部 CDN，任何環境都顯示得出來 ===== */
 const IC={
