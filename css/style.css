@@ -220,3 +220,38 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 .lockbox .note{font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:7px 10px}
 .ownerline{margin-top:22px;font-size:12.5px;color:var(--muted)}
 .linkbtn{border:0;background:none;color:var(--accent);font-weight:700;text-decoration:underline;padding:0 4px;font-size:12.5px}
+
+/* 首頁「清單／平面圖」切換 */
+.slotlabel{flex-wrap:wrap}
+.seg{margin-left:auto;display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px}
+.seg button{border:0;background:none;border-radius:999px;padding:5px 14px;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--on-accent);font-weight:700}
+
+/* 平面圖：圖片和圖示放在同一個框裡，圖示用百分比定位 */
+.floorbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:10px;font-size:13px;color:var(--muted)}
+.floorbar span{flex:1;min-width:0}
+.floorbar.editing{background:var(--warn-bg);border-color:transparent;color:var(--warn);font-weight:500}
+.floorbar button{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:700;color:var(--ink)}
+.floorbar button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.floorwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);max-height:75vh}
+.floormap{position:relative;width:100%;user-select:none;-webkit-user-select:none}
+.floormap.zoom{width:200%}
+.floormap img{display:block;width:100%;height:auto;pointer-events:none}
+.fmk{position:absolute;transform:translate(-50%,-50%);border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.fmk .dot{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.fmk .lab{background:rgba(19,38,42,.86);color:#fff;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:6px;white-space:nowrap}
+.fmk.st-now .dot{background:var(--accent);color:var(--on-accent)}
+.fmk.st-ok .dot{background:var(--ok);color:#fff}
+.fmk.st-abn .dot{background:var(--bad);color:#fff}
+.fmk.st-miss .dot,.fmk.st-na .dot,.fmk.st-future .dot{background:var(--miss);color:#fff}
+.fmk.st-now .dot{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 2px 8px rgba(0,0,0,.35),0 0 0 0 rgba(12,103,108,.5)}50%{box-shadow:0 2px 8px rgba(0,0,0,.35),0 0 0 9px rgba(12,103,108,0)}}
+.fmk.drag{cursor:grab;touch-action:none}
+.fmk.drag .dot{outline:3px dashed var(--warn);outline-offset:3px}
+.fmk.moving{cursor:grabbing;z-index:5}
+.fmk.moving .dot{transform:scale(1.15)}
+.fmk:focus-visible .dot{outline:3px solid var(--ink);outline-offset:3px}
+.floorfoot{display:flex;align-items:center;gap:10px;margin-top:8px}
+.floorfoot .legend{margin:0;flex:1}
+.floornote{font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:7px 10px;margin-top:8px}
+@media (prefers-reduced-motion:reduce){.fmk.st-now .dot{animation:none}}

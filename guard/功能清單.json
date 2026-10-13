@@ -15,6 +15,11 @@
     { "名稱": "管制藥自動算帳", "檔案": "js/app.js", "關鍵字": "結存跟帳對不上" },
     { "名稱": "護理長月總覽格子", "檔案": "js/app.js", "關鍵字": "function gridHTML" },
     { "名稱": "選點班人智慧搜尋", "檔案": "js/app.js", "關鍵字": "function renderNurses" },
-    { "名稱": "首頁", "檔案": "index.html", "關鍵字": "js/app.js" }
+    { "名稱": "首頁", "檔案": "index.html", "關鍵字": "js/app.js" },
+    { "名稱": "首頁清單／平面圖切換", "檔案": "js/app.js", "關鍵字": "data-act=\"homemode\"" },
+    { "名稱": "平面圖畫面", "檔案": "js/floor.js", "關鍵字": "export function floorHTML" },
+    { "名稱": "平面圖拖動圖示", "檔案": "js/floor.js", "關鍵字": "export function bindFloorDrag" },
+    { "名稱": "平面圖位置存雲端", "檔案": "js/store.js", "關鍵字": "export const saveFloor" },
+    { "名稱": "平面圖圖片", "檔案": "js/floor.js", "關鍵字": "img/a051-floor.jpg" }
   ]
 }

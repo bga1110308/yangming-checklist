@@ -1,6 +1,7 @@
 /* 畫面程式：首頁、點班表單、護理長總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
 import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js';
-import { start, OWNER, saveRecord, saveBase, seedDemo, resetDemo, googleLogin, logout } from './store.js';
+import { start, OWNER, saveRecord, saveBase, saveFloor, seedDemo, resetDemo, googleLogin, logout } from './store.js';
+import { floorHTML, bindFloorDrag } from './floor.js';
 
 /* ===== 圖示：直接寫在檔案裡，不靠外部 CDN，任何環境都顯示得出來 ===== */
 const IC={
@@ -26,8 +27,10 @@ function slotRange(date,sid){const a=pymd(date),b=pymd(date);a.setHours(SH[sid].
 function dueDay(f,date){if(f.freq!=='monthly')return true;const d=pymd(date);return d.getDate()===firstSunday(d.getFullYear(),d.getMonth());}
 
 /* ===== 資料：紀錄存在 Firebase 雲端，大家共用同一份；畫面只透過 store.js 讀寫 ===== */
-const NKEY='a051-nurse', RKEY='a051-role';
-let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null};
+const NKEY='a051-nurse', RKEY='a051-role', HKEY='a051-home';
+let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{}};
+/* 首頁顯示方式（清單／平面圖）記在這台裝置；平面圖的編輯、放大只是這次畫面的狀態 */
+let HOMEMODE='list', FLOOR={edit:false,zoom:false};
 let LOADED=false, SEEDING=false, baseChain=Promise.resolve();
 function localGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function localSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
@@ -48,6 +51,7 @@ function startCloud(){
       if(!list.length&&!fromCache&&!SEEDING){SEEDING=true; seedDemo(seed().records).catch(()=>{});}
     },
     onBase:v=>{S.base=Object.assign({},v.base||{}); S.baseLog=(v.log||[]).slice(); refresh();},
+    onFloor:v=>{S.pos=Object.assign({},v.pos||{}); refresh();},
     onError:e=>{console.error(e); toast('暫時連不到雲端，請檢查網路後重新整理');}
   });
 }
@@ -172,27 +176,36 @@ function monthlyInfo(f){
   const last=r?`本月 ${md(thisFS)} ${r.st==='abn'?'有異常':'已完成'}`:`本月 ${md(thisFS)} ${pymd(thisFS)<now?'未點':'還沒到'}`;
   return {txt:`${last}・下次 ${md(ymd(nx))}`, st:r?r.st:(pymd(thisFS)<now?'miss':'future'), date:thisFS};
 }
+/* 一張表「這一班」的狀態：清單和平面圖都用這個，兩邊顯示的永遠一致 */
+function formNow(f){
+  const sl=homeSlot(f);
+  if(!sl){const mi=monthlyInfo(f);
+    return {st:mi.st==='future'?'na':mi.st, sub:mi.txt, pill:mi.st==='future'?'下個月':ST_TXT[mi.st],
+      attrs:`data-act="open" data-f="${f.id}" data-d="${mi.date}" data-s="D"`};}
+  const st=slotStatus(f,sl.date,sl.sid), r=rec(f.id,sl.date,sl.sid);
+  let sub=`${f.when}・${SH[sl.sid].name}`;
+  if(r) sub=`${esc(r.who)} ${r.t} 點${r.st==='abn'?`・${r.abn.length} 項異常`:''}`;
+  if(st==='future') sub+=`・${pad(SH[sl.sid].start)}:00 開始`;
+  return {st, sub, pill:ST_TXT[st], attrs:`data-act="open" data-f="${f.id}" data-d="${sl.date}" data-s="${sl.sid}"`};
+}
 function homeView(){
   const cs=curShift(); const today=ymd(new Date());
-  const rows=FORMS.map(f=>{
-    const sl=homeSlot(f);
-    if(!sl){const mi=monthlyInfo(f);
-      return frow(f,mi.txt,mi.st==='future'?'na':mi.st,`data-act="open" data-f="${f.id}" data-d="${mi.date}" data-s="D"`,mi.st==='future'?'下個月':ST_TXT[mi.st]);}
-    const st=slotStatus(f,sl.date,sl.sid), r=rec(f.id,sl.date,sl.sid);
-    let sub=`${f.when}・${SH[sl.sid].name}`;
-    if(r) sub=`${esc(r.who)} ${r.t} 點${r.st==='abn'?`・${r.abn.length} 項異常`:''}`;
-    if(st==='future') sub+=`・${pad(SH[sl.sid].start)}:00 開始`;
-    return frow(f,sub,st,`data-act="open" data-f="${f.id}" data-d="${sl.date}" data-s="${sl.sid}"`);
-  }).join('');
   const pending=FORMS.filter(f=>{const sl=homeSlot(f);return sl&&['now','miss'].includes(slotStatus(f,sl.date,sl.sid));}).length;
   const missMonth=monthSlots().filter(x=>x.st==='miss').length;
+  const body=HOMEMODE==='map'
+    ?floorHTML({pos:S.pos,editing:FLOOR.edit,zoom:FLOOR.zoom,head:isHead(),statusOf:formNow,note:TRIAL_NOTE})
+    :`<div class="list">${FORMS.map(f=>{const n=formNow(f);return frow(f,n.sub,n.st,n.attrs,n.pill);}).join('')}</div>`;
   return `
     <h1 class="page">本班點班</h1>
     <p class="lede">${cs.name}（${cs.code}）・點一張表開始，數量正常按「全部符合」就好</p>
     <div class="demo">${IC.info}<div><b>試用版・大家共用</b>：每個人看到的是同一份紀錄，有人送出其他人馬上看得到。紀錄是示範資料，請勿輸入真實病人資料。<br>右上角可以切換「護理師／護理長」。${TRIAL_NOTE}</div></div>
     ${missMonth?`<div class="alert">${IC.warn}本月有 ${missMonth} 次逾時未點<button data-tab="overview">看總覽</button></div>`:''}
-    <div class="slotlabel">今天 ${md(today)}<span>${pending?`還有 ${pending} 張待點`:'本班都點完了'}</span></div>
-    <div class="list">${rows}</div>`;
+    <div class="slotlabel">今天 ${md(today)}<span>${pending?`還有 ${pending} 張待點`:'本班都點完了'}</span>
+      <span class="seg" role="tablist" aria-label="顯示方式">
+        <button class="${HOMEMODE==='list'?'on':''}" data-act="homemode" data-m="list">清單</button>
+        <button class="${HOMEMODE==='map'?'on':''}" data-act="homemode" data-m="map">平面圖</button>
+      </span></div>
+    ${body}`;
 }
 function frow(f,sub,st,attrs,pillTxt){
   const markCls={ok:'st-ok',abn:'st-abn',miss:'st-miss',now:'st-now'}[st]||'st-miss';
@@ -598,6 +611,11 @@ const ACT={
     try{await resetDemo(seed().records);toast('已放回示範資料');}catch(e){toast('沒有成功，只有專案擁有者能清資料');}},
   login:async()=>{try{await googleLogin();}catch(e){if(e&&e.code!=='auth/popup-closed-by-user')toast('登入沒有完成，請再試一次');}},
   logout:async()=>{await logout();toast('已登出');},
+  homemode:b=>{HOMEMODE=b.dataset.m; localSet(HKEY,HOMEMODE); FLOOR.edit=false; render();},
+  'floor-edit':()=>{if(!isHead()){toast('只有護理長能調整位置');return;} FLOOR.edit=!FLOOR.edit; render();
+    if(!FLOOR.edit)toast('位置已儲存');},
+  'floor-zoom':()=>{FLOOR.zoom=!FLOOR.zoom; render();},
+  'floor-reset':()=>{S.pos={}; render(); saveFloor({}).then(()=>toast('已恢復預設位置')).catch(()=>toast('沒有存成功，請檢查網路'));},
   role:()=>setRole(isHead()?'nurse':'head'),
   'role-head':()=>setRole('head')
 };
@@ -622,5 +640,11 @@ document.addEventListener('keydown',e=>{
 
 /* 點班人是「這支手機是誰在用」，只記在這台裝置 */
 /* 點班人是「這支手機是誰在用」，只記在這台裝置 */
-S.nurse=localGet(NKEY); S.role=localGet(RKEY)==='head'?'head':'nurse'; render(); startCloud();
+S.nurse=localGet(NKEY); S.role=localGet(RKEY)==='head'?'head':'nurse'; HOMEMODE=localGet(HKEY)==='map'?'map':'list';
+/* 放開圖示時存雲端：只送這一個圖示的新位置，其他圖示照原本的 */
+bindFloorDrag((id,x,y)=>{
+  S.pos=Object.assign({},S.pos,{[id]:{x,y}});
+  saveFloor(S.pos).catch(()=>toast('位置沒有存成功，請檢查網路'));
+});
+render(); startCloud();
 setInterval(()=>{if(!LOADED)return; renderTop(); if(TAB==='home'&&!D)render();},60000);
