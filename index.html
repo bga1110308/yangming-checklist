@@ -15,12 +15,12 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<link rel="stylesheet" href="css/style.css?v=20261013122300">
+<link rel="stylesheet" href="css/style.css?v=20261013180003">
 <script>
   /* 版本檢查：手機可能還留著舊版頁面。打開時問一下雲端最新版本號，不一樣就換成新版網址重開。
      同一個版本只重開一次，避免網路不穩時一直重整。 */
   (function(){
-    const V='20261013122300';
+    const V='20261013180003';
     fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(j=>{
       if(!j.v||j.v===V)return;
       try{if(sessionStorage.getItem('a051-reload')===j.v)return;sessionStorage.setItem('a051-reload',j.v);}catch(e){}
@@ -52,6 +52,6 @@
 </div></div>
 <div id="guidebox"></div>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=20261013122300"></script>
+<script type="module" src="js/app.js?v=20261013180003"></script>
 </body>
 </html>
