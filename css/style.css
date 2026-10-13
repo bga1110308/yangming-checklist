@@ -255,3 +255,6 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 .floorfoot .legend{margin:0;flex:1}
 .floornote{font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:7px 10px;margin-top:8px}
 @media (prefers-reduced-motion:reduce){.fmk.st-now .dot{animation:none}}
+/* 平面圖圖例：跟圖示一樣用實心顏色，才看得出對應 */
+.fl-legend i{border-radius:50%}
+.lg-now{background:var(--accent)}.lg-ok{background:var(--ok)}.lg-abn{background:var(--bad)}.lg-miss{background:var(--miss)}

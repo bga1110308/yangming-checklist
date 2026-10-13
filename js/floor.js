@@ -38,7 +38,7 @@ export function floorHTML({ pos, editing, zoom, head, statusOf, note }) {
       </div>
     </div>
     <div class="floorfoot">
-      <div class="legend"><span><i class="st-now"></i>待點</span><span><i class="st-ok"></i>已完成</span><span><i class="st-abn"></i>有異常</span><span><i class="st-miss"></i>逾時未點</span></div>
+      <div class="legend fl-legend"><span><i class="lg-now"></i>待點</span><span><i class="lg-ok"></i>已完成</span><span><i class="lg-abn"></i>有異常</span><span><i class="lg-miss"></i>逾時未點／還沒到</span></div>
       <button class="linkbtn" data-act="floor-zoom">${zoom ? '縮小' : '放大'}</button>
     </div>
     ${head && editing ? `<p class="floornote">${note}</p>` : ''}`;
