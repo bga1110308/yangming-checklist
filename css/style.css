@@ -330,3 +330,22 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 .guide-table thead th{border-top:0;background:var(--surface-2);color:var(--muted);font-size:12px}
 .guide-table tbody th{color:var(--accent);white-space:nowrap}
 .guide-table td{color:var(--muted)}
+
+/* 點班人員名單（基本量設定頁）：上面一列新增，下面每人一列可以直接改名 */
+.seccount{font-size:12.5px;font-weight:500;color:var(--muted);margin-left:8px}
+.nadd{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;background:var(--accent-soft);border-radius:11px;padding:10px;margin-bottom:10px}
+.nadd .submit{padding:9px 18px}
+.nset{display:flex;flex-direction:column;gap:6px}
+.nrow{display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:6px 8px}
+.nrow .field{padding:7px 9px;font-size:14.5px}
+.nrow .field[data-k="n"]{font-weight:700}
+.nrow button{border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;white-space:nowrap}
+.nrow .ndel{grid-column:3/5;border:1px solid var(--line);background:var(--surface-2);color:var(--muted)}
+.nrow .nyes{border:0;background:var(--bad);color:#fff}
+.nrow .nno{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+@media (max-width:480px){
+  .nadd{grid-template-columns:1fr 1fr}
+  .nadd .submit{grid-column:1/3}
+  .nrow{grid-template-columns:1fr 1fr}
+  .nrow .ndel{grid-column:1/3}
+}

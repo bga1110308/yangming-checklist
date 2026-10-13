@@ -37,6 +37,7 @@ function subscribe(h) {
   onSnapshot(doc(db, 'settings', 'base'), s => h.onBase(s.exists() ? s.data() : {}), h.onError);
   onSnapshot(doc(db, 'settings', 'map'), s => h.onFloor(s.exists() ? s.data() : {}), h.onError);
   onSnapshot(collection(db, 'active'), s => h.onActive(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), h.onError);
+  onSnapshot(collection(db, 'nurses'), s => h.onNurses(s.docs.map(d => Object.assign({ id: d.id }, d.data())), s.metadata.fromCache), h.onError);
 }
 
 export const googleLogin = () => signInWithPopup(auth, new GoogleAuthProvider());
@@ -52,6 +53,17 @@ export const markActive = (id, who, by) => setDoc(doc(db, 'active', id), { who, 
 export const clearActive = id => deleteDoc(doc(db, 'active', id));
 /* 平面圖上六個圖示的位置（百分比），大家共用同一份 */
 export const saveFloor = pos => setDoc(doc(db, 'settings', 'map'), { pos: clean(pos) });
+
+/* 點班人員名單：一個人一筆（n 名字、t 職稱或單位、at 排序用）。
+   不放在同一份文件的陣列裡，是因為安全規則沒辦法逐一檢查陣列裡每個名字的長度，一人一筆才能每筆都把關 20 字。 */
+export const saveNurse = (id, x) => setDoc(id ? doc(db, 'nurses', id) : doc(collection(db, 'nurses')), { n: x.n, t: x.t || '', at: x.at });
+export const removeNurse = id => deleteDoc(doc(db, 'nurses', id));
+/* 雲端第一次沒有名單時放入預設名單。用固定代號 n01、n02…，兩個人同時打開也只會蓋成同一份，不會變兩倍 */
+export async function seedNurses(list) {
+  const batch = writeBatch(db);
+  list.forEach(([n, t], i) => batch.set(doc(db, 'nurses', 'n' + String(i + 1).padStart(2, '0')), { n, t, at: i }));
+  await batch.commit();
+}
 
 /* 雲端完全沒紀錄時放進示範資料。整批一次寫入：如果別人剛好同時放好了，這批會被安全規則擋下，不會重複 */
 export async function seedDemo(seedRecords) {

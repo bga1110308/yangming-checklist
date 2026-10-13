@@ -185,6 +185,36 @@
       "名稱": "使用說明含第二階段規劃",
       "檔案": "js/guide.js",
       "關鍵字": "第二階段可以做的控管"
+    },
+    {
+      "名稱": "點班人員名單存雲端",
+      "檔案": "js/store.js",
+      "關鍵字": "collection(db, 'nurses')"
+    },
+    {
+      "名稱": "雲端沒名單時放入預設名單",
+      "檔案": "js/store.js",
+      "關鍵字": "export async function seedNurses"
+    },
+    {
+      "名稱": "護理長新增點班人員",
+      "檔案": "js/app.js",
+      "關鍵字": "function addNurse"
+    },
+    {
+      "名稱": "護理長改名、移除點班人員",
+      "檔案": "js/app.js",
+      "關鍵字": "function delNurse"
+    },
+    {
+      "名稱": "選點班人讀雲端名單",
+      "檔案": "js/app.js",
+      "關鍵字": "nurseList().filter"
+    },
+    {
+      "名稱": "使用說明含新增點班人員",
+      "檔案": "js/guide.js",
+      "關鍵字": "點班人員名單"
     }
   ]
 }

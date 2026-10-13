@@ -1,6 +1,7 @@
 /* 畫面程式：首頁、點班表單、點班總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
-import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js?v=20261013122300';
-import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout } from './store.js?v=20261013122300';
+import { SHIFTS, SH, REASONS, DEFAULT_NURSES, FORMS, FM } from './forms.js?v=20261013122300';
+import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout,
+  saveNurse, removeNurse, seedNurses } from './store.js?v=20261013122300';
 import { floorHTML, bindFloorDrag } from './floor.js?v=20261013122300';
 import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js?v=20261013122300';
 import { guideHTML, GUIDE_KEY } from './guide.js?v=20261013122300';
@@ -31,12 +32,12 @@ function dueDay(f,date){if(f.freq!=='monthly')return true;const d=pymd(date);ret
 
 /* ===== 資料：紀錄存在 Firebase 雲端，大家共用同一份；畫面只透過 store.js 讀寫 ===== */
 const NKEY='a051-nurse', RKEY='a051-role', HKEY='a051-home';
-let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{},active:{}};
+let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{},active:{},nurses:[]};
 /* 首頁顯示方式（清單／平面圖）記在這台裝置；平面圖的編輯、放大只是這次畫面的狀態 */
 let HOMEMODE='list', FLOOR={edit:false,zoom:false};
 /* QR 貼紙產生一次就留著，雲端更新重畫畫面時才不會消失 */
 let QRHTML='';
-let LOADED=false, SEEDING=false, baseChain=Promise.resolve();
+let LOADED=false, SEEDING=false, NSEEDING=false, baseChain=Promise.resolve();
 function localGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function localSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
@@ -59,11 +60,20 @@ function startCloud(){
     onBase:v=>{S.base=Object.assign({},v.base||{}); S.baseLog=(v.log||[]).slice(); refresh();},
     onFloor:v=>{S.pos=Object.assign({},v.pos||{}); refresh();},
     onActive:list=>{S.active=Object.fromEntries(list.map(a=>[a.id,a])); refresh();},
+    onNurses:(list,fromCache)=>{
+      S.nurses=list.sort((a,b)=>(a.at-b.at)||a.id.localeCompare(b.id)); refreshPicker(); refresh();
+      // 雲端還沒有名單：放入預設的第二組名單，之後就以雲端為準
+      if(!list.length&&!fromCache&&!NSEEDING){NSEEDING=true; seedNurses(DEFAULT_NURSES).catch(()=>{});}
+    },
     onError:e=>{console.error(e); toast('暫時連不到雲端，請檢查網路後重新整理');}
   });
 }
-/* 別人送出時更新畫面；自己正在點的表不重畫，免得填到一半被洗掉 */
-function refresh(){if(TAB==='home'&&D)return; render();}
+/* 別人送出時更新畫面；自己正在點的表、正在設定頁打字時都不重畫，免得填到一半被洗掉 */
+function refresh(){
+  if(TAB==='home'&&D)return;
+  if(TAB==='settings'&&document.activeElement&&document.activeElement.matches('#view input'))return;
+  render();
+}
 
 async function persistRecord(r){
   try{await saveRecord(r); return true;}
@@ -95,7 +105,7 @@ function seed(){
         if(f.id==='fridge'&&d===5&&skip.fridge5)return;
         if(f.id==='cold'&&d===3&&sid==='E'&&skip.cold3E)return;
         const t=new Date(a.getTime()+(5+Math.floor(rnd()*40))*60000);
-        const n=NURSES[Math.floor(rnd()*NURSES.length)][0];
+        const n=DEFAULT_NURSES[Math.floor(rnd()*DEFAULT_NURSES.length)][0];
         const rc={f:f.id,d:date,s:sid,who:n,t:hm(t),st:'ok',abn:[],n:countItems(f,sid)};
         if(f.type==='cold')rc.extra={use:f.drugs.map(x=>x.use),stock:f.drugs.map(x=>x.b)};
         if(f.type==='ctrl')rc.extra={in:0,use:0,stock:3};
@@ -142,7 +152,7 @@ function render(){
   if(!LOADED){v.innerHTML='<h1 class="page">本班點班</h1><p class="empty">正在載入大家的點班紀錄…</p>';return;}
   if(TAB==='home') v.innerHTML = D ? formView() : homeView();
   if(TAB==='overview') v.innerHTML=overviewView();
-  if(TAB==='settings') v.innerHTML=isHead()?settingsView():lockedView('基本量設定','備品基本量由護理長統一修改，改一次每一班都同步，而且留下誰改的。');
+  if(TAB==='settings') v.innerHTML=isHead()?settingsView():lockedView('基本量設定','備品基本量和點班人員名單由護理長統一修改，改一次每一班都同步，而且留下誰改的。');
   if(TAB==='home'&&D&&!rec(D.f,D.d,D.s)) updateFoot();
 }
 function renderTop(){
@@ -603,12 +613,66 @@ function settingsView(){
     <div class="fchips">${opts.map(o=>`<button class="${SF===o.id?'on':''}" data-act="sform" data-f="${o.id}">${o.short}</button>`).join('')}</div>
     <div class="setlist">${rows}</div>
     <div class="sec">修改紀錄</div>${log}
+    ${nursesSetHTML()}
     <div class="sec">點班位置 QR 碼貼紙</div>
     <p class="lede">每個點班位置一張，印出來貼在急救車、冰箱、儀器櫃上。手機一掃就打開那張表，點班人會自動帶入。</p>
     <div class="rowflex"><button class="submit" data-act="qr-show">顯示 QR 貼紙</button><button class="danger" style="border-color:var(--line);color:var(--ink)" data-act="qr-print">列印</button></div>
     <div class="qrsheet" id="qrsheet">${QRHTML}</div>
     ${ownerView()}`;
 }
+/* ===== 點班人員名單（護理長）：新增、改名、移除，存雲端，大家的「選點班人」馬上同步 ===== */
+const NMAX=20;
+let NDEL=null;   // 按過一次「移除」、等待確認的那一位
+/* 雲端名單還沒載入時先用預設名單，選名字的畫面才不會是空的 */
+function nurseList(){return S.nurses.length?S.nurses:DEFAULT_NURSES.map(([n,t],i)=>({id:'',n,t,at:i}));}
+function nursesSetHTML(){
+  const rows=S.nurses.map(x=>`<div class="nrow">
+      <input class="field" value="${esc(x.n)}" maxlength="${NMAX}" data-nid="${x.id}" data-k="n" aria-label="名字">
+      <input class="field" value="${esc(x.t)}" maxlength="${NMAX}" data-nid="${x.id}" data-k="t" placeholder="職稱或單位" aria-label="職稱或單位">
+      ${NDEL===x.id
+        ?`<button class="nyes" data-act="nurse-del-yes" data-id="${x.id}">確定移除</button><button class="nno" data-act="nurse-del-no">取消</button>`
+        :`<button class="ndel" data-act="nurse-del" data-id="${x.id}">移除</button>`}
+    </div>`).join('');
+  return `<div class="sec">點班人員名單<span class="seccount">${S.nurses.length} 人</span></div>
+    <p class="lede">這份名單就是大家按「選點班人」時跳出來的名字，改了所有手機馬上同步。改名不會改到以前的點班紀錄。名字最多 ${NMAX} 字。</p>
+    <div class="nadd">
+      <input class="field" id="na-n" maxlength="${NMAX}" placeholder="名字（必填）" autocomplete="off">
+      <input class="field" id="na-t" maxlength="${NMAX}" placeholder="職稱或單位，例：碩專班1" autocomplete="off">
+      <button class="submit" data-act="nurse-add">新增</button>
+    </div>
+    <div class="nset">${rows||'<p class="empty">名單載入中…</p>'}</div>`;
+}
+/* 名字的共同檢查：新增和改名都走這裡，規則只寫一份 */
+function nurseNameError(n,selfId){
+  if(!n)return '名字不能空白';
+  if(n.length>NMAX)return `名字最多 ${NMAX} 字`;
+  if(S.nurses.some(x=>x.n===n&&x.id!==selfId))return `名單裡已經有「${n}」`;
+  return '';
+}
+async function addNurse(){
+  if(!isHead()){toast('只有護理長能改點班人員');return;}
+  const n=document.getElementById('na-n').value.trim(), t=document.getElementById('na-t').value.trim().slice(0,NMAX);
+  const err=nurseNameError(n,null); if(err){toast(err);document.getElementById('na-n').focus();return;}
+  const at=Math.max(Date.now(),...S.nurses.map(x=>x.at+1));
+  try{await saveNurse(null,{n,t,at}); render(); toast(`已新增點班人員：${n}`); setTimeout(()=>{const el=document.getElementById('na-n');if(el)el.focus();},50);}
+  catch(e){toast('沒有存成功，請檢查網路再按一次');}
+}
+async function editNurse(el){
+  const x=S.nurses.find(v=>v.id===el.dataset.nid); if(!x)return;
+  if(!isHead()){toast('只有護理長能改點班人員');render();return;}
+  const k=el.dataset.k, v=el.value.trim().slice(0,NMAX);
+  if(v===x[k])return;
+  if(k==='n'){const err=nurseNameError(v,x.id); if(err){toast(err);render();return;}}
+  try{await saveNurse(x.id,Object.assign({},x,{[k]:v})); toast(k==='n'?`已改名：${x.n} → ${v}`:`已更新：${x.n}`);}
+  catch(e){toast('沒有存成功，請檢查網路再改一次');render();}
+}
+async function delNurse(id){
+  const x=S.nurses.find(v=>v.id===id); NDEL=null; if(!x){render();return;}
+  if(S.nurses.length<=1){toast('至少要留一位點班人員');render();return;}
+  try{await removeNurse(id); render(); toast(`已移除：${x.n}（以前的點班紀錄會保留）`);}
+  catch(e){toast('沒有移除成功，請檢查網路再試');render();}
+}
+
 /* 頁尾的擁有者區：只有專案擁有者用 Google 登入後能清掉重來，同學切成護理長也看不到這顆按鈕 */
 function ownerView(){
   const u=S.user;
@@ -675,7 +739,7 @@ function showGuide(){document.getElementById('guidebox').innerHTML=guideHTML(TRI
 /* ===== 切換身分：記在這台裝置，下次打開還是同一個身分 ===== */
 function setRole(r){
   S.role=r; localSet(RKEY,r); D=null; render();
-  toast(r==='head'?'已切換成護理長，可以改基本量、調整平面圖位置':'已切換成護理師');
+  toast(r==='head'?'已切換成護理長，可以改基本量、點班人員、平面圖位置':'已切換成護理師');
 }
 
 /* ===== 選點班人：打一個字就跳出符合的人 ===== */
@@ -685,9 +749,11 @@ function closePicker(){document.getElementById('sheet').hidden=true;pickThen=nul
 function renderNurses(q){
   q=q.trim();
   const hl=s=>q?esc(s).split(esc(q)).join(`<mark>${esc(q)}</mark>`):esc(s);
-  const list=NURSES.filter(([n,id])=>!q||n.includes(q)||id.toLowerCase().includes(q.toLowerCase()));
-  document.getElementById('nlist').innerHTML=list.length?list.map(([n,id])=>`<button data-nurse="${n}"><span>${hl(n)}</span><small>${hl(id)}</small></button>`).join(''):'<p class="empty">找不到，換個字試試</p>';
+  const list=nurseList().filter(x=>!q||x.n.includes(q)||x.t.toLowerCase().includes(q.toLowerCase()));
+  document.getElementById('nlist').innerHTML=list.length?list.map(x=>`<button data-nurse="${esc(x.n)}"><span>${hl(x.n)}</span><small>${hl(x.t)}</small></button>`).join(''):'<p class="empty">找不到，換個字試試</p>';
 }
+/* 選名字的視窗開著時名單有變動，照目前打的字重新列 */
+function refreshPicker(){if(!document.getElementById('sheet').hidden)renderNurses(document.getElementById('nq').value);}
 
 /* ===== 小提示 ===== */
 let toastT;
@@ -746,6 +812,10 @@ const ACT={
     if(!FLOOR.edit)toast('位置已儲存');},
   'floor-zoom':()=>{FLOOR.zoom=!FLOOR.zoom; render();},
   'floor-reset':()=>{S.pos={}; render(); saveFloor({}).then(()=>toast('已恢復預設位置')).catch(()=>toast('沒有存成功，請檢查網路'));},
+  'nurse-add':()=>addNurse(),
+  'nurse-del':b=>{NDEL=b.dataset.id;render();},
+  'nurse-del-no':()=>{NDEL=null;render();},
+  'nurse-del-yes':b=>delNurse(b.dataset.id),
   role:()=>setRole(isHead()?'nurse':'head'),
   'role-head':()=>setRole('head')
 };
@@ -762,15 +832,19 @@ document.addEventListener('input',e=>{
   const k=e.target.dataset.in; if(!k||!D)return;
   D.x[+e.target.dataset.i][k]=e.target.value; updateFoot();
 });
-document.addEventListener('change',e=>{if(e.target.dataset.base)changeBase(e.target);});
+document.addEventListener('change',e=>{
+  if(e.target.dataset.base)changeBase(e.target);
+  if(e.target.dataset.nid)editNurse(e.target);
+});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!document.getElementById('sheet').hidden)closePicker();
   if(e.key==='Escape'&&document.getElementById('guide'))ACT['guide-close']();
   if(e.key==='Escape'&&!document.getElementById('scanner').hidden)closeScanner();
   if(e.key==='Enter'&&e.target.id==='nq'){const f=document.querySelector('#nlist [data-nurse]');if(f)f.click();}
+  if(e.key==='Enter'&&(e.target.id==='na-n'||e.target.id==='na-t'))addNurse();
+  if(e.key==='Enter'&&e.target.dataset.nid)e.target.blur();
 });
 
-/* 點班人是「這支手機是誰在用」，只記在這台裝置 */
 /* 點班人是「這支手機是誰在用」，只記在這台裝置 */
 S.nurse=localGet(NKEY); S.role=localGet(RKEY)==='head'?'head':'nurse'; HOMEMODE=localGet(HKEY)==='map'?'map':'list';
 /* 放開圖示時存雲端：只送這一個圖示的新位置，其他圖示照原本的 */
