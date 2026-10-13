@@ -11,12 +11,40 @@ const steps = [
   ['切換護理長', '右上角可以切換「護理師／護理長」。護理長多了改備品基本量、調整平面圖位置、印 QR 碼貼紙。']
 ];
 
+/* 護理長印 QR 碼貼紙的步驟 */
+const qrSteps = [
+  '右上角切換成「護理長」。',
+  '下方按「基本量設定」，拉到最下面的「點班位置 QR 碼貼紙」。',
+  '按「顯示 QR 貼紙」，會出現 6 張，每個點班位置一張。',
+  '按「列印」，一張 A4 會印出 6 張貼紙，剪下來分別貼在急救車、冰箱、儀器櫃上。'
+];
+
+/* 第二階段規劃：項目、怎麼做、能解決什麼 */
+const phase2 = [
+  ['藥品效期管理', '急救車、冰箱的藥登記批號和效期', '到期前一個月、前一週自動提醒，不用每月翻盒子看'],
+  ['儀器使用年限', '每台儀器登記購入日、保養日、校正日', '快到保養或報廢年限時提醒，評鑑時直接列清單'],
+  ['儀器借用與使用率', '每台儀器貼自己的 QR 碼（例如血壓計 NO.3），借走時掃一下、歸還再掃一下', '知道哪一台現在在哪一床、誰借的；系統自動算每台的使用率，看出哪幾台常用、哪幾台幾乎沒用，買新或報廢有數據可以根據'],
+  ['耗材自動補單', '點班數量低於基本量時自動列進補貨清單', '不用另外寫補單']
+];
+
 export function guideHTML(trialNote) {
   return `<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="guide-t">
     <div class="modal-in">
       <button class="modal-x" data-act="guide-close" aria-label="關閉說明">×</button>
       <h2 id="guide-t">A051 無紙化點班・使用說明</h2>
       <ol class="guide">${steps.map(([t, d]) => `<li><b>${t}</b><span>${d}</span></li>`).join('')}</ol>
+
+      <h3 class="guide-h">護理長怎麼印 QR 碼</h3>
+      <ol class="guide-sub">${qrSteps.map(s => `<li>${s}</li>`).join('')}</ol>
+      <p class="guide-tip">用手機內建相機掃也可以，一樣會直接打開那張表。</p>
+
+      <h3 class="guide-h">第二階段可以做的控管</h3>
+      <div class="guide-tablewrap"><table class="guide-table">
+        <thead><tr><th>項目</th><th>怎麼做</th><th>能解決什麼</th></tr></thead>
+        <tbody>${phase2.map(([a, b, c]) => `<tr><th>${a}</th><td>${b}</td><td>${c}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="guide-tip">儀器借用用的是這次做好的 QR 掃碼功能，只差把「一個位置一張碼」改成「一台儀器一張碼」。</p>
+
       <p class="guide-note">${trialNote}<br>裡面都是示範資料，請不要輸入真實病人資料。</p>
       <button class="submit wide" data-act="guide-close">開始使用</button>
     </div></div>`;

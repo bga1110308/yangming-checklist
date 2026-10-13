@@ -319,3 +319,14 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 .lg-busy{background:var(--warn)}
 .alert.busy{background:var(--warn-bg);color:var(--warn);margin-top:12px}
 .alert.busy span{flex:1;min-width:0}
+
+/* 使用說明：印 QR 碼步驟、第二階段表格 */
+.guide-h{font-size:15.5px;font-weight:900;margin:20px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+.guide-sub{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+.guide-tip{font-size:13px;color:var(--muted);margin:8px 0 0}
+.guide-tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.guide-table{border-collapse:collapse;width:100%;font-size:13px;min-width:460px}
+.guide-table th,.guide-table td{padding:8px 10px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.guide-table thead th{border-top:0;background:var(--surface-2);color:var(--muted);font-size:12px}
+.guide-table tbody th{color:var(--accent);white-space:nowrap}
+.guide-table td{color:var(--muted)}
