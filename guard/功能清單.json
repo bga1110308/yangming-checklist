@@ -20,6 +20,17 @@
     { "名稱": "平面圖畫面", "檔案": "js/floor.js", "關鍵字": "export function floorHTML" },
     { "名稱": "平面圖拖動圖示", "檔案": "js/floor.js", "關鍵字": "export function bindFloorDrag" },
     { "名稱": "平面圖位置存雲端", "檔案": "js/store.js", "關鍵字": "export const saveFloor" },
-    { "名稱": "平面圖圖片", "檔案": "js/floor.js", "關鍵字": "img/a051-floor.jpg" }
+    { "名稱": "平面圖圖片", "檔案": "js/floor.js", "關鍵字": "img/a051-floor.jpg" },
+    { "名稱": "送出時存每一項數量", "檔案": "js/app.js", "關鍵字": "vals:buildVals(f)" },
+    { "名稱": "顯示這次點的數量表", "檔案": "js/app.js", "關鍵字": "function valsTable" },
+    { "名稱": "舊紀錄反推數量", "檔案": "js/app.js", "關鍵字": "function valsOf" },
+    { "名稱": "首頁掃碼點班鈕", "檔案": "js/app.js", "關鍵字": "data-act=\"scan\"" },
+    { "名稱": "QR 網址直接開表", "檔案": "js/app.js", "關鍵字": "function routeFromHash" },
+    { "名稱": "相機掃碼", "檔案": "js/qr.js", "關鍵字": "export async function startScan" },
+    { "名稱": "QR 貼紙產生", "檔案": "js/qr.js", "關鍵字": "export async function stickersHTML" },
+    { "名稱": "第一次打開跳使用說明", "檔案": "js/app.js", "關鍵字": "if(!localGet(GUIDE_KEY)" },
+    { "名稱": "使用說明內容含平面圖", "檔案": "js/guide.js", "關鍵字": "調整位置" },
+    { "名稱": "右上角說明鈕", "檔案": "js/app.js", "關鍵字": "data-act=\"guide-open\"" },
+    { "名稱": "掃碼畫面", "檔案": "index.html", "關鍵字": "id=\"scanvideo\"" }
   ]
 }

@@ -2,6 +2,8 @@
 import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js';
 import { start, OWNER, saveRecord, saveBase, saveFloor, seedDemo, resetDemo, googleLogin, logout } from './store.js';
 import { floorHTML, bindFloorDrag } from './floor.js';
+import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js';
+import { guideHTML, GUIDE_KEY } from './guide.js';
 
 /* ===== 圖示：直接寫在檔案裡，不靠外部 CDN，任何環境都顯示得出來 ===== */
 const IC={
@@ -9,6 +11,7 @@ const IC={
   back:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   user:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
   info:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+  qr:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>',
   lock:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
   warn:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>'
 };
@@ -31,6 +34,8 @@ const NKEY='a051-nurse', RKEY='a051-role', HKEY='a051-home';
 let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{}};
 /* 首頁顯示方式（清單／平面圖）記在這台裝置；平面圖的編輯、放大只是這次畫面的狀態 */
 let HOMEMODE='list', FLOOR={edit:false,zoom:false};
+/* QR 貼紙產生一次就留著，雲端更新重畫畫面時才不會消失 */
+let QRHTML='';
 let LOADED=false, SEEDING=false, baseChain=Promise.resolve();
 function localGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function localSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
@@ -46,7 +51,8 @@ function startCloud(){
   start({
     onUser:u=>{S.user=u; render();},
     onRecords:(list,fromCache)=>{
-      S.records=list; LOADED=true; refresh();
+      const first=!LOADED; S.records=list; LOADED=true; refresh();
+      if(first)routeFromHash();
       // 第一次上線雲端是空的，自動放示範資料，同學打開就看得到總覽的效果
       if(!list.length&&!fromCache&&!SEEDING){SEEDING=true; seedDemo(seed().records).catch(()=>{});}
     },
@@ -144,7 +150,8 @@ function renderTop(){
     <div class="ward"><b>A051 病房</b><small class="num">${now.getFullYear()-1911}/${pad(now.getMonth()+1)}/${pad(now.getDate())}（${WD[now.getDay()]}）${hm(now)}</small></div>
     <span class="shiftchip">${s.name} <span class="num">${s.code}</span></span>
     <button class="rolechip${isHead()?' head':''}" data-act="role" aria-label="切換身分">${isHead()?'護理長':'護理師'}<small>切換</small></button>
-    <button class="who${S.nurse?'':' empty'}" data-act="pick">${IC.user}${S.nurse?esc(S.nurse):'選點班人'}</button>`;
+    <button class="who${S.nurse?'':' empty'}" data-act="pick">${IC.user}${S.nurse?esc(S.nurse):'選點班人'}</button>
+    <button class="helpbtn" data-act="guide-open" aria-label="使用說明">?<span>說明</span></button>`;
   // 護理長專用的兩個分頁，護理師身分時加鎖頭提示
   ['overview','settings'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('locked',!isHead()));
 }
@@ -200,6 +207,7 @@ function homeView(){
     <p class="lede">${cs.name}（${cs.code}）・點一張表開始，數量正常按「全部符合」就好</p>
     <div class="demo">${IC.info}<div><b>試用版・大家共用</b>：每個人看到的是同一份紀錄，有人送出其他人馬上看得到。紀錄是示範資料，請勿輸入真實病人資料。<br>右上角可以切換「護理師／護理長」。${TRIAL_NOTE}</div></div>
     ${missMonth?`<div class="alert">${IC.warn}本月有 ${missMonth} 次逾時未點<button data-tab="overview">看總覽</button></div>`:''}
+    <button class="scanbtn" data-act="scan">${IC.qr}<span><b>掃碼點班</b><small>掃點班位置上的 QR 碼，直接進那張表</small></span></button>
     <div class="slotlabel">今天 ${md(today)}<span>${pending?`還有 ${pending} 張待點`:'本班都點完了'}</span>
       <span class="seg" role="tablist" aria-label="顯示方式">
         <button class="${HOMEMODE==='list'?'on':''}" data-act="homemode" data-m="list">清單</button>
@@ -244,7 +252,50 @@ function doneView(f,r){
   let extra='';
   if(f.type==='ctrl'&&r.extra.use) extra=`<p class="empty">本班用 ${r.extra.use} Amp（${esc(r.extra.bed)} 床，病歷號 ${esc(r.extra.chart)}，餘棄 ${esc(r.extra.waste)} mg），領入 ${r.extra.in} Amp，結存 ${r.extra.stock}。</p>`;
   return `<div class="done-box"><h3>${r.st==='abn'?'本班已點，有異常':'本班已點完'}</h3>
-    <p class="lede" style="margin:0">${esc(r.who)} 在 ${r.t} 送出${r.late?'（補點）':''}，送出後不能改，有錯要寫在下一班。</p>${list}${extra}</div>`;
+    <p class="lede" style="margin:0">${esc(r.who)} 在 ${r.t} 送出${r.late?'（補點）':''}，送出後不能改，有錯要寫在下一班。</p>${list}${extra}
+    ${valsTable(r,true)}</div>`;
+}
+
+/* ===== 每一項點了多少：送出時整張表都存下來，事後可以完整回看 ===== */
+/* 一列＝一個要點的數字：g 位置、l 品項、b 基本量、a 實點、x 補充說明 */
+function buildVals(f){
+  const out=[];
+  if(f.type==='count') visItems(f,D.s).forEach(x=>{
+    const bs=partBases(f,x), v=D.x[x.i].v;
+    x.p.forEach((p,k)=>out.push({g:x.g,l:x.n+(p.l?'・'+p.l:''),b:String(fmtV(bs[k])),a:String(fmtV(v[k]))}));
+  });
+  if(f.type==='check') f.qs.forEach((q,i)=>out.push({l:q,b:'符合',a:D.x[i].v?'符合':'不符合'}));
+  if(f.type==='cold') f.drugs.forEach((g,i)=>{const dx=D.x[i];
+    out.push({l:g.n,b:String(baseOf('cold',i,0,g.b)),a:String(dx.stock),x:`領入 ${dx.in}・使用中 ${dx.use}`});});
+  if(f.type==='ctrl'){const x=D.x[0];
+    out.push({l:'Dormicum 結存',b:String(x.prev+x.in-x.use),a:String(x.stock),x:`上班結存 ${x.prev}・領入 ${x.in}・消耗 ${x.use}`});}
+  return out;
+}
+/* 舊紀錄沒有存每一項：用「基本量＋當時記下的異常」反推，正常的項目實點就是基本量 */
+function valsOf(r){
+  if(r.vals)return r.vals;
+  const f=FM[r.f], ab=Object.fromEntries((r.abn||[]).map(a=>[a.l,a.a]));
+  const out=[];
+  if(f.type==='count') visItems(f,r.s).forEach(x=>partBases(f,x).forEach((b,k)=>{
+    const l=x.n+(x.p[k].l?'・'+x.p[k].l:''), bb=String(fmtV(b));
+    out.push({g:x.g,l,b:bb,a:ab[l]??bb});
+  }));
+  if(f.type==='check') f.qs.forEach(q=>out.push({l:q,b:'符合',a:ab[q]??'符合'}));
+  if(f.type==='cold'&&r.extra) f.drugs.forEach((g,i)=>out.push({l:g.n,b:String(baseOf('cold',i,0,g.b)),a:String(r.extra.stock[i]),x:`使用中 ${r.extra.use[i]}`}));
+  if(f.type==='ctrl'&&r.extra) out.push({l:'Dormicum 結存',b:String(baseOf('ctrl',0,0,f.drug.b)),a:String(r.extra.stock),x:`領入 ${r.extra.in}・消耗 ${r.extra.use}`});
+  return out;
+}
+/* 像紙本一樣的「品項｜基本量｜實點」表，不符合的列標紅；open＝一打開就展開 */
+function valsTable(r,open){
+  const rows=valsOf(r); if(!rows.length)return '';
+  let lastG='';
+  const body=rows.map(v=>{
+    const g=v.g&&v.g!==lastG?`<tr class="vg"><td colspan="3">${esc(v.g)}</td></tr>`:''; if(v.g)lastG=v.g;
+    const bad=v.a!==v.b;
+    return `${g}<tr class="${bad?'bad':''}"><td>${esc(v.l)}${v.x?`<small>${esc(v.x)}</small>`:''}</td><td class="num">${esc(v.b)}</td><td class="num">${esc(v.a)}</td></tr>`;
+  }).join('');
+  return `<details class="vals"${open?' open':''}><summary>這次點的數量（${rows.length} 項）</summary>
+    <div class="valswrap"><table><thead><tr><th>品項</th><th>基本量</th><th>實點</th></tr></thead><tbody>${body}</tbody></table></div></details>`;
 }
 function abnLi(a){return `<li><b>${esc(a.l)}</b>　基本 <span class="num">${esc(a.b)}</span> → 實點 <span class="num">${esc(a.a)}</span>${a.r||a.note?`<small>${esc(a.r)}${a.r&&a.note?'・':''}${esc(a.note)}</small>`:''}</li>`;}
 
@@ -413,7 +464,7 @@ async function submitForm(){
     return;
   }
   const f=FM[D.f], now=new Date();
-  const r={f:D.f,d:D.d,s:D.s,who:S.nurse,t:hm(now),abn:buildAbn(f),n:v.total};
+  const r={f:D.f,d:D.d,s:D.s,who:S.nurse,t:hm(now),abn:buildAbn(f),n:v.total,vals:buildVals(f)};
   if(slotRange(D.d,D.s)[1]<now)r.late=true;
   if(f.type==='cold')r.extra={use:f.drugs.map((g,i)=>D.x[i].use),stock:f.drugs.map((g,i)=>D.x[i].stock)};
   if(f.type==='ctrl'){const x=D.x[0];r.extra={in:x.in,use:x.use,stock:x.stock,bed:x.bed,chart:x.chart,waste:x.waste};}
@@ -493,7 +544,8 @@ function detailPanel(){
     const r=rec(fid,d,s), st=slotStatus(f,d,s);
     if(!r) return `<div class="dcard"><h4>${SH[s].name} <small>${ST_TXT[st]}</small></h4>${st==='miss'?'<p class="empty">這班沒有人點班，系統已在班別結束時通知護理長。</p>':''}</div>`;
     return `<div class="dcard ${r.st==='abn'?'is-bad':'is-ok'}"><h4>${SH[s].name} <small>${esc(r.who)}・${r.t}${r.late?'・補點':''}</small></h4>
-      ${r.abn.length?`<ul class="abnlist">${r.abn.map(abnLi).join('')}</ul>`:`<p class="empty">全部 ${r.n} 項符合。</p>`}</div>`;
+      ${r.abn.length?`<ul class="abnlist">${r.abn.map(abnLi).join('')}</ul>`:`<p class="empty">全部 ${r.n} 項符合。</p>`}
+      ${valsTable(r,false)}</div>`;
   }).join('');
   return `<div class="panel"><h3>${md(d)}　${f.name}</h3><div class="cards" style="margin-top:6px">${parts}</div></div>`;
 }
@@ -519,6 +571,10 @@ function settingsView(){
     <div class="fchips">${opts.map(o=>`<button class="${SF===o.id?'on':''}" data-act="sform" data-f="${o.id}">${o.short}</button>`).join('')}</div>
     <div class="setlist">${rows}</div>
     <div class="sec">修改紀錄</div>${log}
+    <div class="sec">點班位置 QR 碼貼紙</div>
+    <p class="lede">每個點班位置一張，印出來貼在急救車、冰箱、儀器櫃上。手機一掃就打開那張表，點班人會自動帶入。</p>
+    <div class="rowflex"><button class="submit" data-act="qr-show">顯示 QR 貼紙</button><button class="danger" style="border-color:var(--line);color:var(--ink)" data-act="qr-print">列印</button></div>
+    <div class="qrsheet" id="qrsheet">${QRHTML}</div>
     ${ownerView()}`;
 }
 /* 頁尾的擁有者區：只有專案擁有者用 Google 登入後能清掉重來，同學切成護理長也看不到這顆按鈕 */
@@ -549,6 +605,40 @@ function changeBase(el){
   S.baseLog.push({t:`${md(ymd(new Date()))} ${hm(new Date())}`,who:(S.nurse||'未選名字')+'（護理長）',l:`${f.short}・${l}`,from,to});
   persistBase(); render(); toast(`已更新基本量：${l} → ${to}`);
 }
+
+/* ===== 用表單代號直接打開「這一班」的那張表：QR 碼、掃碼、網址 #f-cart 都走這裡 ===== */
+function goForm(fid){
+  const f=FM[fid]; if(!f)return;
+  const sl=homeSlot(f)||{date:monthlyInfo(f).date,sid:'D'};
+  TAB='home'; FLOOR.edit=false;
+  ACT.open({dataset:{f:fid,d:sl.date,s:sl.sid}});
+}
+/* 網址帶 #f-代號（貼紙 QR）：資料載入後開表，再把網址的 # 清掉，避免重新整理又跳一次 */
+function routeFromHash(){
+  const fid=fidFrom(location.hash); if(!fid||!LOADED)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  goForm(fid);
+}
+window.addEventListener('hashchange',routeFromHash);
+
+/* ===== 頁面上的掃碼鈕 ===== */
+function openScanner(){
+  const box=document.getElementById('scanner'); box.hidden=false;
+  document.getElementById('scanmsg').textContent='把 QR 碼放進框框裡';
+  startScan(document.getElementById('scanvideo'),text=>{
+    const fid=fidFrom(text);
+    if(!fid){document.getElementById('scanmsg').textContent='這不是點班位置的 QR 碼，請換一張';return;}
+    closeScanner(); goForm(fid); toast(`已打開：${FM[fid].name}`);
+  },err=>{
+    document.getElementById('scanmsg').textContent=err==='denied'
+      ?'沒有相機權限。請到瀏覽器設定允許這個網站使用相機，或直接用手機相機掃 QR 碼。'
+      :'打不開相機。可以直接用手機內建的相機掃 QR 碼，一樣會進到點班表。';
+  });
+}
+function closeScanner(){stopScan(); document.getElementById('scanner').hidden=true;}
+
+/* ===== 使用說明 ===== */
+function showGuide(){document.getElementById('guidebox').innerHTML=guideHTML(TRIAL_NOTE);}
 
 /* ===== 切換身分：記在這台裝置，下次打開還是同一個身分 ===== */
 function setRole(r){
@@ -611,6 +701,14 @@ const ACT={
     try{await resetDemo(seed().records);toast('已放回示範資料');}catch(e){toast('沒有成功，只有專案擁有者能清資料');}},
   login:async()=>{try{await googleLogin();}catch(e){if(e&&e.code!=='auth/popup-closed-by-user')toast('登入沒有完成，請再試一次');}},
   logout:async()=>{await logout();toast('已登出');},
+  scan:()=>openScanner(),
+  'scan-close':()=>closeScanner(),
+  'guide-open':()=>showGuide(),
+  'guide-close':()=>{document.getElementById('guidebox').innerHTML='';localSet(GUIDE_KEY,'1');},
+  'qr-show':async()=>{toast('產生 QR 碼中…');
+    try{QRHTML=await stickersHTML();render();}catch(e){toast('QR 碼產生失敗，請檢查網路再試');}},
+  'qr-print':async()=>{if(!QRHTML){try{QRHTML=await stickersHTML();render();}catch(e){toast('QR 碼產生失敗');return;}}
+    document.body.classList.add('printing-qr');window.print();document.body.classList.remove('printing-qr');},
   homemode:b=>{HOMEMODE=b.dataset.m; localSet(HKEY,HOMEMODE); FLOOR.edit=false; render();},
   'floor-edit':()=>{if(!isHead()){toast('只有護理長能調整位置');return;} FLOOR.edit=!FLOOR.edit; render();
     if(!FLOOR.edit)toast('位置已儲存');},
@@ -635,6 +733,8 @@ document.addEventListener('input',e=>{
 document.addEventListener('change',e=>{if(e.target.dataset.base)changeBase(e.target);});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!document.getElementById('sheet').hidden)closePicker();
+  if(e.key==='Escape'&&document.getElementById('guide'))ACT['guide-close']();
+  if(e.key==='Escape'&&!document.getElementById('scanner').hidden)closeScanner();
   if(e.key==='Enter'&&e.target.id==='nq'){const f=document.querySelector('#nlist [data-nurse]');if(f)f.click();}
 });
 
@@ -647,4 +747,6 @@ bindFloorDrag((id,x,y)=>{
   saveFloor(S.pos).catch(()=>toast('位置沒有存成功，請檢查網路'));
 });
 render(); startCloud();
+/* 第一次打開跳使用說明；從 QR 貼紙掃進來的人直接點班，不擋說明 */
+if(!localGet(GUIDE_KEY)&&!fidFrom(location.hash))showGuide();
 setInterval(()=>{if(!LOADED)return; renderTop(); if(TAB==='home'&&!D)render();},60000);

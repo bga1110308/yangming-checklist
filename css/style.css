@@ -258,3 +258,55 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 /* 平面圖圖例：跟圖示一樣用實心顏色，才看得出對應 */
 .fl-legend i{border-radius:50%}
 .lg-now{background:var(--accent)}.lg-ok{background:var(--ok)}.lg-abn{background:var(--bad)}.lg-miss{background:var(--miss)}
+
+/* 說明鈕、掃碼鈕 */
+.helpbtn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--surface-2);padding:5px 10px;border-radius:999px;font-size:13px;font-weight:900;color:var(--accent)}
+.helpbtn span{font-weight:500;color:var(--ink)}
+.scanbtn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:var(--accent);color:var(--on-accent);border-radius:12px;padding:12px 16px;margin-bottom:6px;box-shadow:var(--shadow)}
+.scanbtn b{display:block;font-size:16px}
+.scanbtn small{display:block;font-size:12.5px;opacity:.85}
+
+/* 每次點的數量表 */
+.vals{margin-top:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.vals summary{cursor:pointer;padding:9px 12px;font-weight:700;font-size:14px;color:var(--accent)}
+.valswrap{overflow-x:auto;max-height:420px;overflow-y:auto}
+.vals table{width:100%;border-collapse:collapse;font-size:13.5px}
+.vals th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-size:12px;text-align:left;padding:6px 10px}
+.vals th:nth-child(n+2),.vals td:nth-child(n+2){text-align:center;width:72px}
+.vals td{border-top:1px solid var(--line);padding:6px 10px;vertical-align:top}
+.vals td small{display:block;color:var(--muted);font-size:12px}
+.vals tr.bad td{background:var(--bad-bg);color:var(--bad);font-weight:700}
+.vals tr.vg td{background:var(--accent-soft);color:var(--accent);font-weight:900;font-size:12.5px;letter-spacing:1px}
+
+/* 使用說明彈窗 */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,20,22,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-in{position:relative;background:var(--surface);color:var(--ink);border-radius:16px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:22px 20px 18px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.modal-in h2{margin:0 36px 12px 0;font-size:19px;font-weight:900;text-wrap:balance}
+.modal-x{position:absolute;top:10px;right:10px;width:38px;height:38px;border:0;border-radius:50%;background:var(--surface-2);font-size:24px;line-height:1;color:var(--muted)}
+.guide{list-style:none;counter-reset:g;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.guide li{counter-increment:g;display:grid;grid-template-columns:30px 1fr;gap:2px 10px;font-size:14px}
+.guide li::before{content:counter(g);grid-row:span 2;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:900;font-size:14px}
+.guide li span{color:var(--muted)}
+.guide-note{font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:8px 10px;margin:14px 0 12px}
+.submit.wide{width:100%}
+
+/* 掃碼畫面 */
+.scanner{position:fixed;inset:0;z-index:70;background:#000;display:flex;align-items:center;justify-content:center}
+.scanner-in{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
+.scanner video{width:100%;max-width:520px;max-height:70vh;object-fit:cover;border-radius:14px;background:#111}
+.scanframe{position:absolute;width:min(62vw,300px);aspect-ratio:1;border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.25);pointer-events:none;top:calc(50% - 60px);left:50%;transform:translate(-50%,-50%)}
+.scanner p{color:#fff;font-size:14.5px;text-align:center;max-width:30em;margin:0}
+
+/* QR 貼紙 */
+.qrsheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px}
+.qrcard{background:#fff;color:#13262a;border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+.qrcard .qrimg{width:100%;max-width:170px}
+.qrcard svg{width:100%;height:auto;display:block}
+.qrcard b{font-size:15px}
+.qrcard small{font-size:11.5px;color:#5a6c70}
+@media print{
+  body.printing-qr *{visibility:hidden}
+  body.printing-qr .qrsheet,body.printing-qr .qrsheet *{visibility:visible}
+  body.printing-qr .qrsheet{position:absolute;left:0;top:0;width:100%;grid-template-columns:repeat(3,1fr);gap:8mm}
+  body.printing-qr .qrcard{break-inside:avoid;border:1px dashed #999}
+}
