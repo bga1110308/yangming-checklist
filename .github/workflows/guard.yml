@@ -1,0 +1,21 @@
+# 功能守門：每次上傳都檢查 guard/功能清單.json 列的功能還在，少了就亮紅燈
+name: 功能守門
+on: [push, pull_request]
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 檢查功能清單
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          items = json.load(open('guard/功能清單.json', encoding='utf-8'))['功能']
+          missing = [i for i in items
+                     if i['關鍵字'] not in open(i['檔案'], encoding='utf-8').read()]
+          for i in missing:
+              print(f"❌ 少了功能：{i['名稱']}（{i['檔案']} 找不到「{i['關鍵字']}」）")
+          if missing:
+              sys.exit(1)
+          print(f"✅ {len(items)} 項功能都在")
+          EOF

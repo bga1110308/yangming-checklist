@@ -1,6 +1,6 @@
 /* 畫面程式：首頁、點班表單、護理長總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
 import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js';
-import { start, OWNER, saveRecord, saveBase, resetDemo, googleLogin, logout } from './store.js';
+import { start, OWNER, saveRecord, saveBase, seedDemo, resetDemo, googleLogin, logout } from './store.js';
 
 /* ===== 圖示：直接寫在檔案裡，不靠外部 CDN，任何環境都顯示得出來 ===== */
 const IC={
@@ -28,7 +28,7 @@ function dueDay(f,date){if(f.freq!=='monthly')return true;const d=pymd(date);ret
 /* ===== 資料：紀錄存在 Firebase 雲端，大家共用同一份；畫面只透過 store.js 讀寫 ===== */
 const NKEY='a051-nurse', RKEY='a051-role';
 let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null};
-let LOADED=false, baseChain=Promise.resolve();
+let LOADED=false, SEEDING=false, baseChain=Promise.resolve();
 function localGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function localSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
@@ -42,7 +42,11 @@ const TRIAL_NOTE='試用版每位同學都能切換成護理長試用。正式�
 function startCloud(){
   start({
     onUser:u=>{S.user=u; render();},
-    onRecords:list=>{S.records=list; LOADED=true; refresh();},
+    onRecords:(list,fromCache)=>{
+      S.records=list; LOADED=true; refresh();
+      // 第一次上線雲端是空的，自動放示範資料，同學打開就看得到總覽的效果
+      if(!list.length&&!fromCache&&!SEEDING){SEEDING=true; seedDemo(seed().records).catch(()=>{});}
+    },
     onBase:v=>{S.base=Object.assign({},v.base||{}); S.baseLog=(v.log||[]).slice(); refresh();},
     onError:e=>{console.error(e); toast('暫時連不到雲端，請檢查網路後重新整理');}
   });

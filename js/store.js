@@ -32,7 +32,8 @@ export function start(h) {
   });
 }
 function subscribe(h) {
-  onSnapshot(collection(db, 'records'), s => h.onRecords(s.docs.map(d => d.data())), h.onError);
+  // 第二個參數告訴畫面「這份是不是雲端確認過的」，空的而且確認過才代表真的沒資料
+  onSnapshot(collection(db, 'records'), s => h.onRecords(s.docs.map(d => d.data()), s.metadata.fromCache), h.onError);
   onSnapshot(doc(db, 'settings', 'base'), s => h.onBase(s.exists() ? s.data() : {}), h.onError);
 }
 
@@ -44,6 +45,13 @@ const clean = o => JSON.parse(JSON.stringify(o));
 export const recId = r => `${r.f}_${r.d}_${r.s}`;
 export const saveRecord = r => setDoc(doc(db, 'records', recId(r)), clean(r));
 export const saveBase = body => setDoc(doc(db, 'settings', 'base'), clean(body));
+
+/* 雲端完全沒紀錄時放進示範資料。整批一次寫入：如果別人剛好同時放好了，這批會被安全規則擋下，不會重複 */
+export async function seedDemo(seedRecords) {
+  const batch = writeBatch(db);
+  seedRecords.forEach(r => batch.set(doc(db, 'records', recId(r)), clean(r)));
+  await batch.commit();
+}
 
 /* 擁有者用：清空所有點班紀錄和基本量，再放回示範資料。一批最多 400 筆，避免超過雲端上限 */
 export async function resetDemo(seedRecords) {
