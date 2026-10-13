@@ -1,6 +1,6 @@
-/* 畫面程式：首頁、點班表單、護理長總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
+/* 畫面程式：首頁、點班表單、點班總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
 import { SHIFTS, SH, REASONS, NURSES, FORMS, FM } from './forms.js';
-import { start, OWNER, saveRecord, saveBase, saveFloor, seedDemo, resetDemo, googleLogin, logout } from './store.js';
+import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout } from './store.js';
 import { floorHTML, bindFloorDrag } from './floor.js';
 import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js';
 import { guideHTML, GUIDE_KEY } from './guide.js';
@@ -31,7 +31,7 @@ function dueDay(f,date){if(f.freq!=='monthly')return true;const d=pymd(date);ret
 
 /* ===== 資料：紀錄存在 Firebase 雲端，大家共用同一份；畫面只透過 store.js 讀寫 ===== */
 const NKEY='a051-nurse', RKEY='a051-role', HKEY='a051-home';
-let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{}};
+let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{},active:{}};
 /* 首頁顯示方式（清單／平面圖）記在這台裝置；平面圖的編輯、放大只是這次畫面的狀態 */
 let HOMEMODE='list', FLOOR={edit:false,zoom:false};
 /* QR 貼紙產生一次就留著，雲端更新重畫畫面時才不會消失 */
@@ -45,7 +45,7 @@ function localSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 const isHead=()=>S.role==='head';
 /* 擁有者（專案建立人）用 Google 登入後才能清掉重來，避免同學誤刪大家的試用紀錄 */
 const isOwner=()=>!!(S.user&&!S.user.isAnonymous&&S.user.email===OWNER);
-const TRIAL_NOTE='試用版每位同學都能切換成護理長試用。正式版只有護理長和指定主管能看總覽、改基本量。';
+const TRIAL_NOTE='所有人都能點班、看點班總覽。試用版每位同學都能切換成護理長試用；正式版只有護理長和指定主管能改備品基本量、調整平面圖位置。';
 
 function startCloud(){
   start({
@@ -58,6 +58,7 @@ function startCloud(){
     },
     onBase:v=>{S.base=Object.assign({},v.base||{}); S.baseLog=(v.log||[]).slice(); refresh();},
     onFloor:v=>{S.pos=Object.assign({},v.pos||{}); refresh();},
+    onActive:list=>{S.active=Object.fromEntries(list.map(a=>[a.id,a])); refresh();},
     onError:e=>{console.error(e); toast('暫時連不到雲端，請檢查網路後重新整理');}
   });
 }
@@ -140,7 +141,7 @@ function render(){
   const v=document.getElementById('view');
   if(!LOADED){v.innerHTML='<h1 class="page">本班點班</h1><p class="empty">正在載入大家的點班紀錄…</p>';return;}
   if(TAB==='home') v.innerHTML = D ? formView() : homeView();
-  if(TAB==='overview') v.innerHTML=isHead()?overviewView():lockedView('護理長總覽','整個月誰點了、哪裡異常、哪一班沒人點，一張表看完。');
+  if(TAB==='overview') v.innerHTML=overviewView();
   if(TAB==='settings') v.innerHTML=isHead()?settingsView():lockedView('基本量設定','備品基本量由護理長統一修改，改一次每一班都同步，而且留下誰改的。');
   if(TAB==='home'&&D&&!rec(D.f,D.d,D.s)) updateFoot();
 }
@@ -152,8 +153,8 @@ function renderTop(){
     <button class="rolechip${isHead()?' head':''}" data-act="role" aria-label="切換身分">${isHead()?'護理長':'護理師'}<small>切換</small></button>
     <button class="who${S.nurse?'':' empty'}" data-act="pick">${IC.user}${S.nurse?esc(S.nurse):'選點班人'}</button>
     <button class="helpbtn" data-act="guide-open" aria-label="使用說明">?<span>說明</span></button>`;
-  // 護理長專用的兩個分頁，護理師身分時加鎖頭提示
-  ['overview','settings'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('locked',!isHead()));
+  // 只有基本量設定是護理長專用，護理師身分時分頁變淡提示
+  document.getElementById('tab-settings').classList.toggle('locked',!isHead());
 }
 /* 護理師身分點到護理長功能時顯示的畫面 */
 function lockedView(title,desc){
@@ -193,6 +194,10 @@ function formNow(f){
   let sub=`${f.when}・${SH[sl.sid].name}`;
   if(r) sub=`${esc(r.who)} ${r.t} 點${r.st==='abn'?`・${r.abn.length} 項異常`:''}`;
   if(st==='future') sub+=`・${pad(SH[sl.sid].start)}:00 開始`;
+  // 還沒送出、但有別人正在點：清單和平面圖都改成「某某正在點」
+  const busy=r?null:busyBy(f.id,sl.date,sl.sid);
+  if(busy) return {st, busy:true, sub:`${esc(busy.who)} 正在點（${busy.min?busy.min+' 分鐘前開始':'剛開始'}）`, pill:'有人在點',
+    attrs:`data-act="open" data-f="${f.id}" data-d="${sl.date}" data-s="${sl.sid}"`};
   return {st, sub, pill:ST_TXT[st], attrs:`data-act="open" data-f="${f.id}" data-d="${sl.date}" data-s="${sl.sid}"`};
 }
 function homeView(){
@@ -201,7 +206,7 @@ function homeView(){
   const missMonth=monthSlots().filter(x=>x.st==='miss').length;
   const body=HOMEMODE==='map'
     ?floorHTML({pos:S.pos,editing:FLOOR.edit,zoom:FLOOR.zoom,head:isHead(),statusOf:formNow,note:TRIAL_NOTE})
-    :`<div class="list">${FORMS.map(f=>{const n=formNow(f);return frow(f,n.sub,n.st,n.attrs,n.pill);}).join('')}</div>`;
+    :`<div class="list">${FORMS.map(f=>{const n=formNow(f);return frow(f,n.sub,n.busy?'busy':n.st,n.attrs,n.pill);}).join('')}</div>`;
   return `
     <h1 class="page">本班點班</h1>
     <p class="lede">${cs.name}（${cs.code}）・點一張表開始，數量正常按「全部符合」就好</p>
@@ -216,7 +221,7 @@ function homeView(){
     ${body}`;
 }
 function frow(f,sub,st,attrs,pillTxt){
-  const markCls={ok:'st-ok',abn:'st-abn',miss:'st-miss',now:'st-now'}[st]||'st-miss';
+  const markCls={ok:'st-ok',abn:'st-abn',miss:'st-miss',now:'st-now',busy:'st-busy'}[st]||'st-miss';
   return `<button class="frow" ${attrs}>
     <span class="fmark ${markCls}">${f.mark}</span>
     <span class="fbody"><b>${f.name}</b><small>${sub}</small></span>
@@ -226,11 +231,35 @@ function frow(f,sub,st,attrs,pillTxt){
 /* ===== 點班表單 ===== */
 function openForm(fid,date,sid){
   const f=FM[fid];
+  leaveForm();
   D={f:fid,d:date,s:sid,x:{},flag:null};
   if(f.type==='ctrl'){const p=prevCtrlStock(date,sid);D.x[0]={in:0,use:0,stock:p,prev:p,bed:'',chart:'',waste:'',note:'',ok:false};}
   if(f.type==='cold'){const pu=prevColdUse(date,sid);f.drugs.forEach((g,i)=>D.x[i]={mode:null,in:0,use:pu[i],stock:baseOf(fid,i,0,g.b),r:'',note:''});}
+  if(!rec(fid,date,sid)) enterForm(`${fid}_${date}_${sid}`);
   TAB='home'; render(); window.scrollTo(0,0);
 }
+
+/* ===== 誰正在點：打開還沒送出的表就登記，每分鐘更新一次；超過 3 分鐘沒更新就當作已離開 ===== */
+const BY=Math.random().toString(36).slice(2,10);   // 這個分頁的代號，用來分辨「是不是我自己」
+const FRESH=3*60*1000;
+let ACTIVE=null, beat=null;
+function enterForm(id){
+  ACTIVE=id;
+  const ping=()=>markActive(id,S.nurse||'有人',BY).catch(()=>{});
+  ping(); beat=setInterval(ping,60*1000);
+}
+function leaveForm(){
+  clearInterval(beat); beat=null;
+  if(ACTIVE){clearActive(ACTIVE).catch(()=>{}); ACTIVE=null;}
+}
+/* 別人正在點這一班的這張表就回傳 {who, min}，自己或沒人點回傳 null */
+function busyBy(fid,date,sid){
+  const a=S.active[`${fid}_${date}_${sid}`];
+  if(!a||a.by===BY||Date.now()-a.at>FRESH)return null;
+  return {who:a.who,min:Math.max(0,Math.round((Date.now()-a.at)/60000))};
+}
+// 關掉分頁或切到別的 App 時也要清掉，免得別人一直看到「正在點」
+window.addEventListener('pagehide',leaveForm);
 function prevRecs(fid){return S.records.filter(r=>r.f===fid).sort((a,b)=>(a.d+SHIFTS.findIndex(s=>s.id===a.s)).localeCompare(b.d+SHIFTS.findIndex(s=>s.id===b.s)));}
 function prevCtrlStock(){const l=prevRecs('ctrl');return l.length?l[l.length-1].extra.stock:baseOf('ctrl',0,0,3);}
 function prevColdUse(){const l=prevRecs('cold');return l.length?l[l.length-1].extra.use.slice():FM.cold.drugs.map(x=>x.use);}
@@ -244,8 +273,10 @@ function formView(){
     </div>
     <div class="prog"><span>${md(D.d)} ${SH[D.s].name} <span class="num">${SH[D.s].code}</span></span>${r?'':'<div class="bar"><i id="pbar" style="width:0"></i></div><span class="num" id="ptxt"></span>'}</div></div>`;
   if(r) return head+doneView(f,r);
+  const busy=busyBy(D.f,D.d,D.s);
+  const warn=busy?`<div class="alert busy">${IC.warn}<span><b>${esc(busy.who)}</b> ${busy.min?busy.min+' 分鐘前':'剛剛'}開始點這張表了。請先跟對方確認，避免重複點班。</span><button data-act="back">先不點</button></div>`:'';
   const body={count:countBody,check:checkBody,cold:coldBody,ctrl:ctrlBody}[f.type](f);
-  return head+body;
+  return head+warn+body;
 }
 function doneView(f,r){
   const list=r.abn.length?`<ul class="abnlist">${r.abn.map(abnLi).join('')}</ul>`:`<p class="empty">全部 ${r.n} 項都符合基本量。</p>`;
@@ -473,6 +504,7 @@ async function submitForm(){
   const keep=D; S.records.push(r); D=null; render(); window.scrollTo(0,0);
   const ok=await persistRecord(r);
   if(!ok){S.records=S.records.filter(x=>x!==r); D=keep; render(); return;}
+  leaveForm();
   toast(`已送出：${f.name}（${SH[r.s].name}）${r.abn.length?`，${r.abn.length} 項異常已通知護理長`:''}`);
 }
 function buildAbn(f){
@@ -491,7 +523,7 @@ function buildAbn(f){
   return out;
 }
 
-/* ===== 護理長總覽：跟紙本一樣的月格子 ===== */
+/* ===== 點班總覽（所有人都能看）：跟紙本一樣的月格子 ===== */
 function monthDays(){const n=new Date();const last=new Date(n.getFullYear(),n.getMonth()+1,0).getDate();return Array.from({length:last},(_,i)=>ymd(new Date(n.getFullYear(),n.getMonth(),i+1)));}
 function monthSlots(fid){
   const out=[];
@@ -643,7 +675,7 @@ function showGuide(){document.getElementById('guidebox').innerHTML=guideHTML(TRI
 /* ===== 切換身分：記在這台裝置，下次打開還是同一個身分 ===== */
 function setRole(r){
   S.role=r; localSet(RKEY,r); D=null; render();
-  toast(r==='head'?'已切換成護理長，可以看總覽、改基本量':'已切換成護理師');
+  toast(r==='head'?'已切換成護理長，可以改基本量、調整平面圖位置':'已切換成護理師');
 }
 
 /* ===== 選點班人：打一個字就跳出符合的人 ===== */
@@ -666,7 +698,7 @@ const ACT={
   open:b=>{ const go=()=>openForm(b.dataset.f,b.dataset.d,b.dataset.s); const f=FM[b.dataset.f];
     if(!rec(f.id,b.dataset.d,b.dataset.s)&&slotStatus(f,b.dataset.d,b.dataset.s)==='future'){toast(`${f.name} 還沒到點班時間`);return;}
     S.nurse||rec(f.id,b.dataset.d,b.dataset.s)?go():openPicker(go); },
-  back:()=>{D=null;render();},
+  back:()=>{leaveForm();D=null;render();},
   pick:()=>openPicker(()=>render()),
   ok:b=>{const f=FM[D.f],i=+b.dataset.i; D.flag=null;
     if(f.type==='count'){D.x[i]={mode:'ok',v:partBases(f,f.flat[i]),r:'',note:''};}
@@ -719,7 +751,7 @@ const ACT={
 };
 document.addEventListener('click',e=>{
   const tab=e.target.closest('[data-tab]');
-  if(tab){TAB=tab.dataset.tab;if(TAB!=='home')D=null;O.sel=null;render();window.scrollTo(0,0);return;}
+  if(tab){TAB=tab.dataset.tab;if(TAB!=='home'){leaveForm();D=null;}O.sel=null;render();window.scrollTo(0,0);return;}
   const nb=e.target.closest('[data-nurse]');
   if(nb){S.nurse=nb.dataset.nurse;localSet(NKEY,S.nurse);const t=pickThen;closePicker();renderTop();toast(`點班人：${S.nurse}`);if(t)t();return;}
   if(e.target.id==='nclose'||e.target.id==='sheet'){closePicker();return;}

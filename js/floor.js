@@ -20,7 +20,7 @@ export function floorHTML({ pos, editing, zoom, head, statusOf, note }) {
     const p = posOf(pos, f.id), n = statusOf(f);
     // 編輯中只能拖、不能點進表單；平常點了就跟清單一樣開那張表
     const act = editing ? `data-fid="${f.id}"` : n.attrs;
-    return `<button class="fmk st-${n.st}${editing ? ' drag' : ''}" style="left:${p.x}%;top:${p.y}%" ${act}
+    return `<button class="fmk st-${n.busy ? 'busy' : n.st}${editing ? ' drag' : ''}" style="left:${p.x}%;top:${p.y}%" ${act}
       aria-label="${f.name}：${n.pill || ''}">
       <span class="dot">${f.mark}</span><span class="lab">${f.short}</span></button>`;
   }).join('');
@@ -38,7 +38,7 @@ export function floorHTML({ pos, editing, zoom, head, statusOf, note }) {
       </div>
     </div>
     <div class="floorfoot">
-      <div class="legend fl-legend"><span><i class="lg-now"></i>待點</span><span><i class="lg-ok"></i>已完成</span><span><i class="lg-abn"></i>有異常</span><span><i class="lg-miss"></i>逾時未點／還沒到</span></div>
+      <div class="legend fl-legend"><span><i class="lg-now"></i>待點</span><span><i class="lg-ok"></i>已完成</span><span><i class="lg-busy"></i>有人在點</span><span><i class="lg-abn"></i>有異常</span><span><i class="lg-miss"></i>逾時未點／還沒到</span></div>
       <button class="linkbtn" data-act="floor-zoom">${zoom ? '縮小' : '放大'}</button>
     </div>
     ${head && editing ? `<p class="floornote">${note}</p>` : ''}`;

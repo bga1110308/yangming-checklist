@@ -3,7 +3,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInAnonymously, GoogleAuthProvider, signInWithPopup, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, doc, onSnapshot, setDoc, getDocs, writeBatch }
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, writeBatch }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* 這組設定是公開的（Firebase 網頁版本來就放在前端），真正的權限由雲端的安全規則把關 */
@@ -36,6 +36,7 @@ function subscribe(h) {
   onSnapshot(collection(db, 'records'), s => h.onRecords(s.docs.map(d => d.data()), s.metadata.fromCache), h.onError);
   onSnapshot(doc(db, 'settings', 'base'), s => h.onBase(s.exists() ? s.data() : {}), h.onError);
   onSnapshot(doc(db, 'settings', 'map'), s => h.onFloor(s.exists() ? s.data() : {}), h.onError);
+  onSnapshot(collection(db, 'active'), s => h.onActive(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), h.onError);
 }
 
 export const googleLogin = () => signInWithPopup(auth, new GoogleAuthProvider());
@@ -46,6 +47,9 @@ const clean = o => JSON.parse(JSON.stringify(o));
 export const recId = r => `${r.f}_${r.d}_${r.s}`;
 export const saveRecord = r => setDoc(doc(db, 'records', recId(r)), clean(r));
 export const saveBase = body => setDoc(doc(db, 'settings', 'base'), clean(body));
+/* 「誰正在點」：打開一張表就寫一筆，關掉或送出就刪掉；by 是這個分頁的代號，分辨是不是自己 */
+export const markActive = (id, who, by) => setDoc(doc(db, 'active', id), { who, by, at: Date.now() });
+export const clearActive = id => deleteDoc(doc(db, 'active', id));
 /* 平面圖上六個圖示的位置（百分比），大家共用同一份 */
 export const saveFloor = pos => setDoc(doc(db, 'settings', 'map'), { pos: clean(pos) });
 

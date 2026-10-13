@@ -310,3 +310,12 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
   body.printing-qr .qrsheet{position:absolute;left:0;top:0;width:100%;grid-template-columns:repeat(3,1fr);gap:8mm}
   body.printing-qr .qrcard{break-inside:avoid;border:1px dashed #999}
 }
+
+/* 有人正在點：橘色，跟「待點」分得出來 */
+.st-busy{background:var(--warn-bg);color:var(--warn)}
+.fmark.st-busy{background:var(--warn);color:#fff}
+.pill.st-busy{background:var(--warn);color:#fff}
+.fmk.st-busy .dot{background:var(--warn);color:#fff;animation:none}
+.lg-busy{background:var(--warn)}
+.alert.busy{background:var(--warn-bg);color:var(--warn);margin-top:12px}
+.alert.busy span{flex:1;min-width:0}
