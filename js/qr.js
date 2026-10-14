@@ -2,7 +2,7 @@
    1. 每個點班位置一張 QR 貼紙，內容是網址加「#f-表單代號」，用手機相機或頁面上的掃碼鈕都能直接進那張表。
    2. 頁面上的掃碼：用手機後鏡頭，每一格畫面交給 jsQR 解碼。
    兩個外部程式庫都在需要時才載入，平常打開頁面不會變慢。 */
-import { FORMS } from './forms.js?v=20261014195244';
+import { FORMS } from './forms.js?v=20261013180003';
 
 const JSQR = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
 const QRGEN = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
