@@ -331,6 +331,10 @@ table.grid{border-collapse:collapse;width:100%;font-size:13px}
 .guide-table tbody th{color:var(--accent);white-space:nowrap}
 .guide-table td{color:var(--muted)}
 
+/* 基本量設定頁：藥品判斷規則的說明框 */
+.drugnote{font-size:13px;line-height:1.6;color:var(--ink);background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:8px;padding:9px 12px;margin:0 0 10px}
+.drugnote b{color:var(--accent)}
+
 /* 點班人員名單（基本量設定頁）：上面一列新增，下面每人一列可以直接改名 */
 .seccount{font-size:12.5px;font-weight:500;color:var(--muted);margin-left:8px}
 .nadd{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;background:var(--accent-soft);border-radius:11px;padding:10px;margin-bottom:10px}
