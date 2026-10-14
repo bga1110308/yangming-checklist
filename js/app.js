@@ -1,10 +1,10 @@
 /* 畫面程式：首頁、點班表單、點班總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
-import { SHIFTS, SH, REASONS, DEFAULT_NURSES, FORMS, FM, ADD_FROM, itemKey, applyItems, hiddenItems } from './forms.js?v=20261013180003';
+import { SHIFTS, SH, REASONS, DEFAULT_NURSES, FORMS, FM, ADD_FROM, itemKey, applyItems, hiddenItems } from './forms.js?v=20261014233017';
 import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout,
-  saveNurse, removeNurse, seedNurses, saveItems } from './store.js?v=20261013180003';
-import { floorHTML, bindFloorDrag } from './floor.js?v=20261013180003';
-import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js?v=20261013180003';
-import { guideHTML, GUIDE_KEY } from './guide.js?v=20261013180003';
+  saveNurse, removeNurse, seedNurses, saveItems } from './store.js?v=20261014233017';
+import { floorHTML, bindFloorDrag } from './floor.js?v=20261014233017';
+import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js?v=20261014233017';
+import { guideHTML, GUIDE_KEY } from './guide.js?v=20261014233017';
 
 /* ===== 圖示：直接寫在檔案裡，不靠外部 CDN，任何環境都顯示得出來 ===== */
 const IC={
