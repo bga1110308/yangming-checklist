@@ -62,7 +62,7 @@ export const FORMS=[
  {id:'cold',short:'冷藏藥',mark:'冷',name:'冷藏藥品管理',type:'cold',shifts:['N','D','E'],when:'三班',drugs:[
   {n:'Humulin R',spec:'100u/10ml/vial',b:0,use:0},{n:'Insulatard',spec:'100u/10ml/vial',b:1,use:0},
   {n:'Heparin',spec:'5000u/5ml/vial',b:1,use:0},{n:'Actrapid',spec:'100u/ml',b:1,use:2}]},
- {id:'ctrl',short:'管制藥',mark:'管',name:'第 4 級管制藥品',type:'ctrl',shifts:['N','D','E'],when:'三班',drug:{n:'Dormicum',spec:'5mg/Amp',b:3}},
+ {id:'ctrl',short:'管制藥',mark:'管',name:'第 4 級管制藥品',type:'ctrl',shifts:['N','D','E'],when:'三班',drugs:[{n:'Dormicum',spec:'5mg/Amp',b:3}]},
  {id:'fridge',short:'冰箱',mark:'冰',name:'醫用冰箱查核',type:'check',shifts:['D'],when:'每天一次',qs:[
   '冰箱溫度介於 2–8°C','冰箱電源插在緊急用電插座','冰箱沒有放藥物以外的物品（檢體要放有蓋容器分隔）',
   '病人個別用藥有標示姓名及床號','已開封藥物有註明開封日期時間，並在規定時間內用完或丟棄','特殊冷藏急需藥品都在有效期限內']},
@@ -76,4 +76,45 @@ export const FORMS=[
 ];
 export const FM=Object.fromEntries(FORMS.map(f=>[f.id,f]));
 FORMS.forEach(f=>{ if(f.groups){ let i=0; f.flat=[]; f.groups.forEach(g=>g.items.forEach(x=>{x.i=i++; x.g=g.pos; f.flat.push(x);})); } });
+/* 冷藏藥、管制藥也給固定代號，基本量、結存量設定都靠代號對到藥，刪掉前面的藥也不會對錯 */
+FORMS.forEach(f=>{ if(f.drugs) f.drugs.forEach((g,i)=>{g.i=i;}); });
+
+/* ===== 護理長新增／刪除品項 =====
+   雲端 settings/items 存 {hide:['表單:代號'], add:[{f,i,n,g?,b?,spec?}]}。
+   程式內建的品項不真的刪，只是藏起來，代號永遠不變，基本量和舊紀錄才不會對錯品項；
+   新增的品項代號從 1000 開始，跟內建的分開。 */
+export const ADD_FROM=1000;
+const ORIG=Object.fromEntries(FORMS.map(f=>[f.id,{
+  groups:f.groups&&f.groups.map(g=>({pos:g.pos,items:g.items.slice()})),
+  drugs:f.drugs&&f.drugs.slice(),
+  qs:f.qs&&f.qs.slice()
+}]));
+export const itemKey=(fid,i)=>`${fid}:${i}`;
+/* 雲端品項清單一有變動就重算每張表的內容；畫面程式只看 f.flat／f.drugs／f.qs，不用知道哪些是新增的 */
+export function applyItems(cfg){
+  const hide=new Set((cfg&&cfg.hide)||[]), add=(cfg&&cfg.add)||[];
+  FORMS.forEach(f=>{
+    const o=ORIG[f.id], mine=add.filter(a=>a.f===f.id), keep=i=>!hide.has(itemKey(f.id,i));
+    if(o.groups){
+      f.groups=o.groups.map(g=>({pos:g.pos,items:g.items.filter(x=>keep(x.i))
+        .concat(mine.filter(a=>a.g===g.pos).map(a=>it(a.n,String(a.b),{i:a.i,g:g.pos,added:true})))}));
+      f.flat=f.groups.flatMap(g=>g.items);
+    }
+    if(o.drugs) f.drugs=o.drugs.filter(g=>keep(g.i)).concat(mine.map(a=>({n:a.n,spec:a.spec||'',b:a.b,use:0,i:a.i,added:true})));
+    // 查核題目維持文字陣列（畫面程式照舊），另外用 qsI 記每題的代號給刪除用
+    if(o.qs){
+      const q=o.qs.map((t,i)=>[t,i]).filter(([,i])=>keep(i)).concat(mine.map(a=>[a.n,a.i]));
+      f.qs=q.map(x=>x[0]); f.qsI=q.map(x=>x[1]);
+    }
+  });
+}
+/* 被藏起來的內建品項（給「復原」用） */
+export function hiddenItems(fid,cfg){
+  const hide=new Set((cfg&&cfg.hide)||[]), o=ORIG[fid], out=[];
+  if(o.groups) o.groups.forEach(g=>g.items.forEach(x=>{if(hide.has(itemKey(fid,x.i)))out.push({i:x.i,n:x.n});}));
+  if(o.drugs) o.drugs.forEach(g=>{if(hide.has(itemKey(fid,g.i)))out.push({i:g.i,n:g.n});});
+  if(o.qs) o.qs.forEach((t,i)=>{if(hide.has(itemKey(fid,i)))out.push({i,n:t});});
+  return out;
+}
+applyItems({});
 

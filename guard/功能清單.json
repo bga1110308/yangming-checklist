@@ -212,6 +212,46 @@
       "關鍵字": "nurseList().filter"
     },
     {
+      "名稱": "冷藏藥結存量要等於護理長設定（預設 1）",
+      "檔案": "js/app.js",
+      "關鍵字": "const coldStock=g=>baseOf('cold',g.i,'s',COLD_STOCK_DEF)"
+    },
+    {
+      "名稱": "基本量設定頁冷藏藥結存量欄位",
+      "檔案": "js/app.js",
+      "關鍵字": "結存量（正常數量）"
+    },
+    {
+      "名稱": "品項清單存雲端（新增刪除）",
+      "檔案": "js/store.js",
+      "關鍵字": "doc(db, 'settings', 'items')"
+    },
+    {
+      "名稱": "雲端品項清單套用到點班表",
+      "檔案": "js/forms.js",
+      "關鍵字": "export function applyItems"
+    },
+    {
+      "名稱": "護理長新增品項",
+      "檔案": "js/app.js",
+      "關鍵字": "function addItem"
+    },
+    {
+      "名稱": "護理長刪除與復原品項",
+      "檔案": "js/app.js",
+      "關鍵字": "function restoreItem"
+    },
+    {
+      "名稱": "管制藥可以多種、各自對帳",
+      "檔案": "js/app.js",
+      "關鍵字": "function ctrlCard"
+    },
+    {
+      "名稱": "使用說明含新增刪除品項",
+      "檔案": "js/guide.js",
+      "關鍵字": "新增、刪除品項"
+    },
+    {
       "名稱": "使用說明含新增點班人員",
       "檔案": "js/guide.js",
       "關鍵字": "點班人員名單"

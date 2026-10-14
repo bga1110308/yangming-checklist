@@ -36,6 +36,7 @@ function subscribe(h) {
   onSnapshot(collection(db, 'records'), s => h.onRecords(s.docs.map(d => d.data()), s.metadata.fromCache), h.onError);
   onSnapshot(doc(db, 'settings', 'base'), s => h.onBase(s.exists() ? s.data() : {}), h.onError);
   onSnapshot(doc(db, 'settings', 'map'), s => h.onFloor(s.exists() ? s.data() : {}), h.onError);
+  onSnapshot(doc(db, 'settings', 'items'), s => h.onItems(s.exists() ? s.data() : {}), h.onError);
   onSnapshot(collection(db, 'active'), s => h.onActive(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), h.onError);
   onSnapshot(collection(db, 'nurses'), s => h.onNurses(s.docs.map(d => Object.assign({ id: d.id }, d.data())), s.metadata.fromCache), h.onError);
 }
@@ -53,6 +54,8 @@ export const markActive = (id, who, by) => setDoc(doc(db, 'active', id), { who, 
 export const clearActive = id => deleteDoc(doc(db, 'active', id));
 /* 平面圖上六個圖示的位置（百分比），大家共用同一份 */
 export const saveFloor = pos => setDoc(doc(db, 'settings', 'map'), { pos: clean(pos) });
+/* 護理長新增／刪除的品項：hide 藏起來的內建品項，add 新增的品項 */
+export const saveItems = cfg => setDoc(doc(db, 'settings', 'items'), { hide: clean(cfg.hide || []), add: clean(cfg.add || []) });
 
 /* 點班人員名單：一個人一筆（n 名字、t 職稱或單位、at 排序用）。
    不放在同一份文件的陣列裡，是因為安全規則沒辦法逐一檢查陣列裡每個名字的長度，一人一筆才能每筆都把關 20 字。 */

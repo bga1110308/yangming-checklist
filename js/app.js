@@ -1,7 +1,7 @@
 /* 畫面程式：首頁、點班表單、點班總覽、基本量設定。資料從 store.js 來，表單內容從 forms.js 來 */
-import { SHIFTS, SH, REASONS, DEFAULT_NURSES, FORMS, FM } from './forms.js?v=20261013180003';
+import { SHIFTS, SH, REASONS, DEFAULT_NURSES, FORMS, FM, ADD_FROM, itemKey, applyItems, hiddenItems } from './forms.js?v=20261013180003';
 import { start, OWNER, saveRecord, saveBase, saveFloor, markActive, clearActive, seedDemo, resetDemo, googleLogin, logout,
-  saveNurse, removeNurse, seedNurses } from './store.js?v=20261013180003';
+  saveNurse, removeNurse, seedNurses, saveItems } from './store.js?v=20261013180003';
 import { floorHTML, bindFloorDrag } from './floor.js?v=20261013180003';
 import { fidFrom, startScan, stopScan, stickersHTML } from './qr.js?v=20261013180003';
 import { guideHTML, GUIDE_KEY } from './guide.js?v=20261013180003';
@@ -32,7 +32,9 @@ function dueDay(f,date){if(f.freq!=='monthly')return true;const d=pymd(date);ret
 
 /* ===== 資料：紀錄存在 Firebase 雲端，大家共用同一份；畫面只透過 store.js 讀寫 ===== */
 const NKEY='a051-nurse', RKEY='a051-role', HKEY='a051-home';
-let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{},active:{},nurses:[]};
+let S={records:[],base:{},baseLog:[],nurse:null,role:'nurse',user:null,pos:{},active:{},nurses:[],items:{hide:[],add:[]}};
+/* 品項清單有變動、但有人正在填表時先不套用，等表關掉再套，免得填到一半項目位置跑掉 */
+let ITEMS_PENDING=false;
 /* 首頁顯示方式（清單／平面圖）記在這台裝置；平面圖的編輯、放大只是這次畫面的狀態 */
 let HOMEMODE='list', FLOOR={edit:false,zoom:false};
 /* QR 貼紙產生一次就留著，雲端更新重畫畫面時才不會消失 */
@@ -59,6 +61,7 @@ function startCloud(){
     },
     onBase:v=>{S.base=Object.assign({},v.base||{}); S.baseLog=(v.log||[]).slice(); refresh();},
     onFloor:v=>{S.pos=Object.assign({},v.pos||{}); refresh();},
+    onItems:v=>{S.items={hide:(v.hide||[]).slice(),add:(v.add||[]).slice()}; ITEMS_PENDING=true; refresh();},
     onActive:list=>{S.active=Object.fromEntries(list.map(a=>[a.id,a])); refresh();},
     onNurses:(list,fromCache)=>{
       S.nurses=list.sort((a,b)=>(a.at-b.at)||a.id.localeCompare(b.id)); refreshPicker(); refresh();
@@ -107,8 +110,8 @@ function seed(){
         const t=new Date(a.getTime()+(5+Math.floor(rnd()*40))*60000);
         const n=DEFAULT_NURSES[Math.floor(rnd()*DEFAULT_NURSES.length)][0];
         const rc={f:f.id,d:date,s:sid,who:n,t:hm(t),st:'ok',abn:[],n:countItems(f,sid)};
-        if(f.type==='cold')rc.extra={use:f.drugs.map(x=>x.use),stock:f.drugs.map(x=>x.b)};
-        if(f.type==='ctrl')rc.extra={in:0,use:0,stock:3};
+        if(f.type==='cold')rc.extra={use:f.drugs.map(()=>0),stock:f.drugs.map(coldStock)};
+        if(f.type==='ctrl')rc.extra={items:f.drugs.map(g=>({i:g.i,n:g.n,in:0,use:0,stock:g.b}))};
         st.records.push(rc);
       });
     });
@@ -118,17 +121,25 @@ function seed(){
   mark(pick('equip',6,'D'),{l:'Pulse Oximeter（小）',b:'4',a:'3',r:'借出',note:'12 床借用'});
   mark(pick('month',99),{l:'三層車',b:'4',a:'3',r:'送修',note:'輪子卡住，已報修'});
   mark(pick('cart',now.getDate()),{l:'手電筒 / 聚光筆燈・聚光筆燈',b:'2',a:'3',r:'多出待歸還',note:'多一支，待查是哪床留下的'});
-  const c=pick('ctrl',7,'D'); if(c){c.extra={in:1,use:1,stock:3,waste:'2.5',bed:'12',chart:'DEMO-0001'};}
+  const c=pick('ctrl',7,'D'); if(c){c.extra={items:[{i:0,n:'Dormicum',in:1,use:1,stock:3,waste:'2.5',bed:'12',chart:'DEMO-0001'}]};}
   return st;
 }
 function countItems(f,sid){
   if(f.type==='count')return visItems(f,sid).length;
   if(f.type==='cold')return f.drugs.length;
   if(f.type==='check')return f.qs.length;
-  return 1;
+  return f.drugs.length;
 }
 function visItems(f,sid){return f.flat.filter(x=>!x.night||sid==='N');}
 function partBases(f,x){return x.p.map((p,k)=>typeof p.b==='number'?baseOf(f.id,x.i,k,p.b):p.b);}
+/* 用代號找品項：新增、刪除品項後，位置跟代號不一定一樣，一律用代號找 */
+const itemOf=(f,i)=>f.flat.find(x=>x.i===+i);
+const drugOf=(f,i)=>f.drugs.find(g=>g.i===+i);
+/* 冷藏藥（10/14 同學回饋）：結存量要等於護理長設定的數量才正常，預設 1；
+   基本量只是參考，使用量 0 也正常（點班前沒人用）。只有冷藏藥這樣算，其他表照原本的基本量。 */
+const COLD_STOCK_DEF=1;
+const coldStock=g=>baseOf('cold',g.i,'s',COLD_STOCK_DEF);
+const coldBase=g=>baseOf('cold',g.i,0,g.b);
 const fmtV=v=>({ok:'正常',bad:'故障',amt:'適量',low:'不足'})[v]??v;
 const fmtBases=bs=>bs.map(v=>v==='ok'?'ok':v==='amt'?'適量':v).join(' / ');
 
@@ -145,6 +156,7 @@ const ST_CELL={ok:'✓',abn:'!',miss:'未',now:'…',future:'',na:''};
 /* ===== 畫面路由 ===== */
 let TAB='home', D=null, O={flt:'all',sel:null}, SF='cart', RESET=false;
 function render(){
+  if(ITEMS_PENDING&&!D){applyItems(S.items); ITEMS_PENDING=false;}
   renderTop();
   ['home','overview','settings'].forEach(t=>document.getElementById('tab-'+t).classList.toggle('on',TAB===t));
   document.getElementById('foot').innerHTML='';
@@ -243,8 +255,10 @@ function openForm(fid,date,sid){
   const f=FM[fid];
   leaveForm();
   D={f:fid,d:date,s:sid,x:{},flag:null};
-  if(f.type==='ctrl'){const p=prevCtrlStock(date,sid);D.x[0]={in:0,use:0,stock:p,prev:p,bed:'',chart:'',waste:'',note:'',ok:false};}
-  if(f.type==='cold'){const pu=prevColdUse(date,sid);f.drugs.forEach((g,i)=>D.x[i]={mode:null,in:0,use:pu[i],stock:baseOf(fid,i,0,g.b),r:'',note:''});}
+  // 管制藥每一種各自帳：上班結存從上一筆紀錄帶過來
+  if(f.type==='ctrl')f.drugs.forEach((g,k)=>{const p=prevCtrlStock(g);D.x[k]={in:0,use:0,stock:p,prev:p,bed:'',chart:'',waste:'',note:'',ok:false};});
+  // 冷藏藥：使用量每班從 0 開始（點班前沒人用就是 0），結存先帶護理長設定的結存量
+  if(f.type==='cold')f.drugs.forEach((g,k)=>D.x[k]={mode:null,in:0,use:0,stock:coldStock(g),r:'',note:''});
   if(!rec(fid,date,sid)) enterForm(`${fid}_${date}_${sid}`);
   TAB='home'; render(); window.scrollTo(0,0);
 }
@@ -271,8 +285,17 @@ function busyBy(fid,date,sid){
 // 關掉分頁或切到別的 App 時也要清掉，免得別人一直看到「正在點」
 window.addEventListener('pagehide',leaveForm);
 function prevRecs(fid){return S.records.filter(r=>r.f===fid).sort((a,b)=>(a.d+SHIFTS.findIndex(s=>s.id===a.s)).localeCompare(b.d+SHIFTS.findIndex(s=>s.id===b.s)));}
-function prevCtrlStock(){const l=prevRecs('ctrl');return l.length?l[l.length-1].extra.stock:baseOf('ctrl',0,0,3);}
-function prevColdUse(){const l=prevRecs('cold');return l.length?l[l.length-1].extra.use.slice():FM.cold.drugs.map(x=>x.use);}
+/* 管制藥紀錄的每一種藥。舊紀錄只有 Dormicum 一種、直接存在 extra 裡，這裡統一轉成清單 */
+function ctrlItems(r){
+  const e=r&&r.extra; if(!e)return [];
+  return e.items||[Object.assign({i:0,n:'Dormicum'},e)];
+}
+/* 這種管制藥的上班結存：找最近一筆有記到它的紀錄；從沒記過（剛新增的藥）就用常備量 */
+function prevCtrlStock(g){
+  const l=prevRecs('ctrl');
+  for(let k=l.length-1;k>=0;k--){const it=ctrlItems(l[k]).find(x=>x.i===g.i); if(it)return it.stock;}
+  return baseOf('ctrl',g.i,0,g.b);
+}
 
 function formView(){
   const f=FM[D.f], r=rec(D.f,D.d,D.s);
@@ -291,7 +314,7 @@ function formView(){
 function doneView(f,r){
   const list=r.abn.length?`<ul class="abnlist">${r.abn.map(abnLi).join('')}</ul>`:`<p class="empty">全部 ${r.n} 項都符合基本量。</p>`;
   let extra='';
-  if(f.type==='ctrl'&&r.extra.use) extra=`<p class="empty">本班用 ${r.extra.use} Amp（${esc(r.extra.bed)} 床，病歷號 ${esc(r.extra.chart)}，餘棄 ${esc(r.extra.waste)} mg），領入 ${r.extra.in} Amp，結存 ${r.extra.stock}。</p>`;
+  if(f.type==='ctrl') extra=ctrlItems(r).filter(x=>x.use).map(x=>`<p class="empty">${esc(x.n)} 本班用 ${x.use} Amp（${esc(x.bed)} 床，病歷號 ${esc(x.chart)}，餘棄 ${esc(x.waste)} mg），領入 ${x.in} Amp，結存 ${x.stock}。</p>`).join('');
   return `<div class="done-box"><h3>${r.st==='abn'?'本班已點，有異常':'本班已點完'}</h3>
     <p class="lede" style="margin:0">${esc(r.who)} 在 ${r.t} 送出${r.late?'（補點）':''}，送出後不能改，有錯要寫在下一班。</p>${list}${extra}
     ${valsTable(r,true)}</div>`;
@@ -306,10 +329,10 @@ function buildVals(f){
     x.p.forEach((p,k)=>out.push({g:x.g,l:x.n+(p.l?'・'+p.l:''),b:String(fmtV(bs[k])),a:String(fmtV(v[k]))}));
   });
   if(f.type==='check') f.qs.forEach((q,i)=>out.push({l:q,b:'符合',a:D.x[i].v?'符合':'不符合'}));
-  if(f.type==='cold') f.drugs.forEach((g,i)=>{const dx=D.x[i];
-    out.push({l:g.n,b:String(baseOf('cold',i,0,g.b)),a:String(dx.stock),x:`領入 ${dx.in}・使用中 ${dx.use}`});});
-  if(f.type==='ctrl'){const x=D.x[0];
-    out.push({l:'Dormicum 結存',b:String(x.prev+x.in-x.use),a:String(x.stock),x:`上班結存 ${x.prev}・領入 ${x.in}・消耗 ${x.use}`});}
+  if(f.type==='cold') f.drugs.forEach((g,k)=>{const dx=D.x[k];
+    out.push({l:g.n+' 結存',b:String(coldStock(g)),a:String(dx.stock),x:`基本 ${coldBase(g)}・領入 ${dx.in}・使用量 ${dx.use}`});});
+  if(f.type==='ctrl') f.drugs.forEach((g,k)=>{const x=D.x[k];
+    out.push({l:g.n+' 結存',b:String(x.prev+x.in-x.use),a:String(x.stock),x:`上班結存 ${x.prev}・領入 ${x.in}・消耗 ${x.use}`});});
   return out;
 }
 /* 舊紀錄沒有存每一項：用「基本量＋當時記下的異常」反推，正常的項目實點就是基本量 */
@@ -322,8 +345,11 @@ function valsOf(r){
     out.push({g:x.g,l,b:bb,a:ab[l]??bb});
   }));
   if(f.type==='check') f.qs.forEach(q=>out.push({l:q,b:'符合',a:ab[q]??'符合'}));
-  if(f.type==='cold'&&r.extra) f.drugs.forEach((g,i)=>out.push({l:g.n,b:String(baseOf('cold',i,0,g.b)),a:String(r.extra.stock[i]),x:`使用中 ${r.extra.use[i]}`}));
-  if(f.type==='ctrl'&&r.extra) out.push({l:'Dormicum 結存',b:String(baseOf('ctrl',0,0,f.drug.b)),a:String(r.extra.stock),x:`領入 ${r.extra.in}・消耗 ${r.extra.use}`});
+  // 舊紀錄的冷藏藥照當時內建順序存，代號就是位置；新增的藥一定有 vals，不會走到這裡
+  if(f.type==='cold'&&r.extra) f.drugs.filter(g=>g.i<ADD_FROM&&r.extra.stock[g.i]!==undefined).forEach(g=>
+    out.push({l:g.n+' 結存',b:String(coldStock(g)),a:String(r.extra.stock[g.i]),x:`使用量 ${r.extra.use[g.i]}`}));
+  if(f.type==='ctrl') ctrlItems(r).forEach(x=>{const g=drugOf(f,x.i);
+    out.push({l:x.n+' 結存',b:String(g?baseOf('ctrl',g.i,0,g.b):x.stock),a:String(x.stock),x:`領入 ${x.in}・消耗 ${x.use}`});});
   return out;
 }
 /* 像紙本一樣的「品項｜基本量｜實點」表，不符合的列標紅；open＝一打開就展開 */
@@ -398,34 +424,39 @@ function checkHTML(q,i){
 
 /* --- 冷藏藥品 --- */
 function coldBody(f){
-  return `<section class="grp"><h3>冷藏藥品<span>結存要等於基本量</span></h3><div class="items">${f.drugs.map((g,i)=>coldHTML(f,g,i)).join('')}</div></section>`;
+  return `<section class="grp"><h3>冷藏藥品<span>使用量 0 也正常・結存量要等於設定量</span></h3><div class="items">${f.drugs.map((g,i)=>coldHTML(f,g,i)).join('')}</div></section>`;
 }
+/* i 是這張表裡的位置（D.x 用位置存），g.i 是藥的固定代號（設定用代號存） */
 function coldHTML(f,g,i){
-  const dx=D.x[i], b=baseOf(f.id,i,0,g.b), abn=dx.mode&&dx.stock!==b;
+  const dx=D.x[i], s=coldStock(g), abn=dx.mode&&dx.stock!==s;
   const cls=['item']; if(dx.mode)cls.push(abn?'is-bad':'is-ok'); if(D.flag===i)cls.push('is-flag');
   let h=`<div class="${cls.join(' ')}" data-item="${i}">
-    <div class="irow"><div class="iname drug">${g.n} <span class="num" style="font-weight:400;color:var(--muted);font-size:12.5px">${g.spec}</span></div><div class="ibase num">基本 ${b}</div></div>
-    <div class="iact"><button class="b-ok${dx.mode==='ok'?' on':''}" data-act="ok" data-i="${i}">${IC.check}符合</button>
-    <button class="b-edit${dx.mode==='edit'?' on':''}" data-act="edit" data-i="${i}">數量不符</button></div>`;
+    <div class="irow"><div class="iname drug">${esc(g.n)} <span class="num" style="font-weight:400;color:var(--muted);font-size:12.5px">${esc(g.spec)}</span></div><div class="ibase num">結存要 ${s}</div></div>
+    <div class="iact"><button class="b-ok${dx.mode==='ok'?' on':''}" data-act="ok" data-i="${i}">${IC.check}沒人用，數量對</button>
+    <button class="b-edit${dx.mode==='edit'?' on':''}" data-act="edit" data-i="${i}">填使用量／結存</button></div>`;
   if(dx.mode==='edit'){
     h+=`<div class="parts">
       <div class="part"><label><span>領入</span></label>${stepper(i,'in',dx.in,false)}</div>
-      <div class="part"><label><span>使用中</span></label>${stepper(i,'use',dx.use,false)}</div>
-      <div class="part"><label><span>結存</span><span class="num">基本 ${b}</span></label>${stepper(i,'stock',dx.stock,dx.stock!==b)}</div></div>`;
-    h+=abn?reasonHTML(i,dx):`<div class="hint">結存跟基本量一樣，會算符合</div>`;
+      <div class="part"><label><span>使用量</span><span class="num">0 也正常</span></label>${stepper(i,'use',dx.use,false)}</div>
+      <div class="part"><label><span>結存量</span><span class="num">要 ${s}</span></label>${stepper(i,'stock',dx.stock,dx.stock!==s)}</div></div>`;
+    h+=abn?reasonHTML(i,dx):`<div class="hint">結存量跟設定一樣，會算符合</div>`;
   } else if(dx.mode==='ok'){
-    h+=`<div class="hint">使用中 ${dx.use}・結存 ${dx.stock}</div>`;
+    h+=`<div class="hint">使用量 ${dx.use}・結存量 ${dx.stock}</div>`;
   }
   return h+'</div>';
 }
 
-/* --- 第 4 級管制藥品：系統自己算帳 --- */
+/* --- 管制藥品：每一種藥各一張卡、各自算帳 --- */
 function ctrlBody(f){
-  const dx=D.x[0], b=baseOf('ctrl',0,0,f.drug.b), expect=dx.prev+dx.in-dx.use;
+  if(!f.drugs.length)return '<p class="empty">管制藥清單是空的，請護理長到基本量設定新增。</p>';
+  return `<div class="cards">${f.drugs.map((g,k)=>ctrlCard(f,g,k)).join('')}</div>`;
+}
+function ctrlCard(f,g,k){
+  const dx=D.x[k], b=baseOf('ctrl',g.i,0,g.b), expect=dx.prev+dx.in-dx.use;
   const bad=dx.stock!==expect, low=dx.stock!==b;
-  const cls=['dcard']; if(dx.ok)cls.push(bad||low?'is-bad':'is-ok');
-  return `<div class="cards"><div class="${cls.join(' ')}" data-item="0">
-    <h4>${f.drug.n} <small class="num">${f.drug.spec}・常備 ${b} Amp</small></h4>
+  const cls=['dcard']; if(dx.ok)cls.push(bad||low?'is-bad':'is-ok'); if(D.flag===k)cls.push('is-flag');
+  return `<div class="${cls.join(' ')}" data-item="${k}">
+    <h4>${esc(g.n)} <small class="num">${esc(g.spec)}・常備 ${b} Amp</small></h4>
     <div class="calc">
       <div><small>上班結存</small><b>${dx.prev}</b></div>
       <div><small>＋領入</small><b>${dx.in}</b></div>
@@ -433,20 +464,20 @@ function ctrlBody(f){
       <div class="${bad?'bad':''}"><small>應有</small><b>${expect}</b></div>
     </div>
     <div class="parts">
-      <div class="part"><label><span>領入（Amp）</span></label>${stepper(0,'in',dx.in,false)}</div>
-      <div class="part"><label><span>消耗（Amp）</span></label>${stepper(0,'use',dx.use,false)}</div>
-      <div class="part"><label><span>實際清點結存</span><span class="num">應有 ${expect}</span></label>${stepper(0,'stock',dx.stock,bad)}</div>
+      <div class="part"><label><span>領入（Amp）</span></label>${stepper(k,'in',dx.in,false)}</div>
+      <div class="part"><label><span>消耗（Amp）</span></label>${stepper(k,'use',dx.use,false)}</div>
+      <div class="part"><label><span>實際清點結存</span><span class="num">應有 ${expect}</span></label>${stepper(k,'stock',dx.stock,bad)}</div>
     </div>
     ${dx.use>0?`<div class="row2">
-      <input class="field" id="c-bed" data-in="bed" data-i="0" value="${esc(dx.bed)}" placeholder="床號（必填）">
-      <input class="field" id="c-chart" data-in="chart" data-i="0" value="${esc(dx.chart)}" placeholder="病歷號（必填）">
-      <input class="field" id="c-waste" data-in="waste" data-i="0" value="${esc(dx.waste)}" placeholder="餘棄量 mg（必填）" inputmode="decimal"></div>
+      <input class="field" id="c-bed-${k}" data-in="bed" data-i="${k}" value="${esc(dx.bed)}" placeholder="床號（必填）">
+      <input class="field" id="c-chart-${k}" data-in="chart" data-i="${k}" value="${esc(dx.chart)}" placeholder="病歷號（必填）">
+      <input class="field" id="c-waste-${k}" data-in="waste" data-i="${k}" value="${esc(dx.waste)}" placeholder="餘棄量 mg（必填）" inputmode="decimal"></div>
       <div class="privacy">試用版請填假資料，例：床號 12、病歷號 DEMO-0001</div>`:''}
     ${bad?`<div class="reason"><div class="lab">結存跟帳對不上：應有 ${expect}，實點 ${dx.stock}。請重新清點，或寫說明（必填）</div>
-      <input class="field" id="c-note" data-in="note" data-i="0" value="${esc(dx.note)}" placeholder="例：已重新清點，已通報護理長"></div>`:''}
+      <input class="field" id="c-note-${k}" data-in="note" data-i="${k}" value="${esc(dx.note)}" placeholder="例：已重新清點，已通報護理長"></div>`:''}
     ${!bad&&low?`<div class="hint" style="color:var(--warn)">結存 ${dx.stock}，低於常備 ${b}，送出後會列為「已用待補」</div>`:''}
-    <div class="iact"><button class="b-ok${dx.ok?' on':''}" data-act="cfm" data-i="0">${IC.check}${dx.ok?'已清點確認':'我已清點，數量如上'}</button></div>
-  </div></div>`;
+    <div class="iact"><button class="b-ok${dx.ok?' on':''}" data-act="cfm" data-i="${k}">${IC.check}${dx.ok?'已清點確認':'我已清點，數量如上'}</button></div>
+  </div>`;
 }
 
 /* ===== 驗證：哪些還沒點、哪些沒寫原因 ===== */
@@ -462,15 +493,15 @@ function validate(){
   });
   if(f.type==='cold') f.drugs.forEach((g,i)=>{
     total++; const dx=D.x[i]; if(!dx.mode){miss.push(i);return;} done++;
-    if(dx.stock!==baseOf('cold',i,0,g.b)&&(!dx.r||!dx.note.trim()))need.push(i);
+    if(dx.stock!==coldStock(g)&&(!dx.r||!dx.note.trim()))need.push(i);
   });
-  if(f.type==='ctrl'){
-    total=1; const dx=D.x[0]; if(dx.ok)done=1; else miss.push(0);
+  if(f.type==='ctrl') f.drugs.forEach((g,k)=>{
+    total++; const dx=D.x[k]; if(dx.ok)done++; else miss.push(k);
     const expect=dx.prev+dx.in-dx.use;
     const noPatient=dx.use>0&&(!dx.bed.trim()||!dx.chart.trim()||!dx.waste.trim());
     const noNote=dx.stock!==expect&&!dx.note.trim();
-    if(noPatient||noNote)need.push(0);
-  }
+    if(noPatient||noNote)need.push(k);
+  });
   return {total,done,miss,need};
 }
 function updateFoot(){
@@ -487,10 +518,10 @@ function updateFoot(){
 function rerenderItem(i){
   const f=FM[D.f], el=document.querySelector(`[data-item="${i}"]`); if(!el)return;
   let h;
-  if(f.type==='count')h=itemHTML(f,f.flat[i]);
+  if(f.type==='count')h=itemHTML(f,itemOf(f,i));
   if(f.type==='check')h=checkHTML(f.qs[i],i);
   if(f.type==='cold')h=coldHTML(f,f.drugs[i],i);
-  if(f.type==='ctrl'){const w=document.createElement('div');w.innerHTML=ctrlBody(f);h=w.firstElementChild.innerHTML;}
+  if(f.type==='ctrl')h=ctrlCard(f,f.drugs[i],i);
   el.outerHTML=h; updateFoot();
 }
 
@@ -508,7 +539,8 @@ async function submitForm(){
   const r={f:D.f,d:D.d,s:D.s,who:S.nurse,t:hm(now),abn:buildAbn(f),n:v.total,vals:buildVals(f)};
   if(slotRange(D.d,D.s)[1]<now)r.late=true;
   if(f.type==='cold')r.extra={use:f.drugs.map((g,i)=>D.x[i].use),stock:f.drugs.map((g,i)=>D.x[i].stock)};
-  if(f.type==='ctrl'){const x=D.x[0];r.extra={in:x.in,use:x.use,stock:x.stock,bed:x.bed,chart:x.chart,waste:x.waste};}
+  // 管制藥每種藥一筆，記代號和名字，之後藥被刪掉、改名，舊紀錄還看得懂
+  if(f.type==='ctrl')r.extra={items:f.drugs.map((g,k)=>{const x=D.x[k];return {i:g.i,n:g.n,in:x.in,use:x.use,stock:x.stock,bed:x.bed,chart:x.chart,waste:x.waste};})};
   r.st=r.abn.length?'abn':'ok';
   if(rec(r.f,r.d,r.s)){toast('這一班剛剛已經有人送出了，請回列表看');D=null;render();return;}
   const keep=D; S.records.push(r); D=null; render(); window.scrollTo(0,0);
@@ -524,12 +556,12 @@ function buildAbn(f){
     x.p.forEach((p,k)=>{ if(dx.v[k]!==bs[k]) out.push({l:x.n+(p.l?'・'+p.l:''),b:String(fmtV(bs[k])),a:String(fmtV(dx.v[k])),r:dx.r,note:dx.note.trim()}); });
   });
   if(f.type==='check') f.qs.forEach((q,i)=>{const dx=D.x[i]; if(dx.v===false)out.push({l:q,b:'符合',a:'不符合',r:'',note:dx.note.trim()});});
-  if(f.type==='cold') f.drugs.forEach((g,i)=>{const dx=D.x[i], b=baseOf('cold',i,0,g.b); if(dx.stock!==b)out.push({l:g.n+' 結存',b:String(b),a:String(dx.stock),r:dx.r,note:dx.note.trim()});});
-  if(f.type==='ctrl'){
-    const x=D.x[0], b=baseOf('ctrl',0,0,f.drug.b), expect=x.prev+x.in-x.use;
-    if(x.stock!==expect) out.push({l:'Dormicum 結存與帳不符',b:String(expect),a:String(x.stock),r:'',note:x.note.trim()});
-    else if(x.stock!==b) out.push({l:'Dormicum 低於常備量',b:String(b),a:String(x.stock),r:'已用待補',note:x.use?`本班用 ${x.use} Amp（${x.bed} 床）`:''});
-  }
+  if(f.type==='cold') f.drugs.forEach((g,i)=>{const dx=D.x[i], s=coldStock(g); if(dx.stock!==s)out.push({l:g.n+' 結存',b:String(s),a:String(dx.stock),r:dx.r,note:dx.note.trim()});});
+  if(f.type==='ctrl') f.drugs.forEach((g,k)=>{
+    const x=D.x[k], b=baseOf('ctrl',g.i,0,g.b), expect=x.prev+x.in-x.use;
+    if(x.stock!==expect) out.push({l:`${g.n} 結存與帳不符`,b:String(expect),a:String(x.stock),r:'',note:x.note.trim()});
+    else if(x.stock!==b) out.push({l:`${g.n} 低於常備量`,b:String(b),a:String(x.stock),r:'已用待補',note:x.use?`本班用 ${x.use} Amp（${x.bed} 床）`:''});
+  });
   return out;
 }
 
@@ -600,18 +632,25 @@ function abnRecords(fid){
 
 /* ===== 基本量設定：改一次，所有班別同步 ===== */
 function settingsView(){
-  const opts=FORMS.filter(f=>f.type!=='check');
+  const opts=FORMS;
   const f=FM[SF];
+  const spec=s=>s?` <span class="num" style="color:var(--muted);font-size:12.5px">${esc(s)}</span>`:'';
   let rows='';
-  if(f.type==='count') rows=f.flat.map(x=>`<div class="setrow"><div class="nm">${esc(x.n)}${x.night?'<span class="tag">大夜點</span>':''}</div><div class="setparts">${x.p.map((p,k)=>setInput(f.id,x.i,k,p)).join('')}</div></div>`).join('');
-  if(f.type==='cold') rows=f.drugs.map((g,i)=>`<div class="setrow"><div class="nm">${g.n} <span class="num" style="color:var(--muted);font-size:12.5px">${g.spec}</span></div><div class="setparts">${setInput('cold',i,0,{l:'結存基本量',b:g.b})}</div></div>`).join('');
-  if(f.type==='ctrl') rows=`<div class="setrow"><div class="nm">${f.drug.n} ${f.drug.spec}</div><div class="setparts">${setInput('ctrl',0,0,{l:'常備量',b:f.drug.b})}</div></div>`;
-  const log=S.baseLog.length?`<ul class="log">${S.baseLog.slice().reverse().map(l=>`<li>${l.t}　${esc(l.who)} 把 <b>${esc(l.l)}</b> 從 <span class="num">${l.from}</span> 改成 <span class="num">${l.to}</span></li>`).join('')}</ul>`:'<p class="empty">還沒有人改過基本量。</p>';
+  if(f.type==='count') rows=f.flat.map(x=>setRow(f,x.i,esc(x.n)+(x.night?'<span class="tag">大夜點</span>':'')+(x.added?'<span class="tag">新增</span>':''),
+    x.p.map((p,k)=>setInput(f.id,x.i,k,p)).join(''))).join('');
+  if(f.type==='cold') rows=f.drugs.map(g=>setRow(f,g.i,esc(g.n)+spec(g.spec),
+    setInput('cold',g.i,0,{l:'基本量',b:g.b})+setInput('cold',g.i,'s',{l:'結存量（正常數量）',b:COLD_STOCK_DEF}))).join('');
+  if(f.type==='ctrl') rows=f.drugs.map(g=>setRow(f,g.i,esc(g.n)+spec(g.spec),setInput('ctrl',g.i,0,{l:'常備量',b:g.b}))).join('');
+  if(f.type==='check') rows=f.qs.map((q,k)=>setRow(f,f.qsI[k],`${k+1}. ${esc(q)}`,'')).join('');
+  const log=S.baseLog.length?`<ul class="log">${S.baseLog.slice().reverse().map(logLi).join('')}</ul>`:'<p class="empty">還沒有人改過基本量。</p>';
   return `<h1 class="page">基本量設定</h1>
     <p class="lede">紙本改基本量要拿紅筆劃，表頭沒改下個月照樣印錯。這裡由護理長改一次，之後每一班都用新數字，而且留下誰改的。</p>
     <div class="adminbar ok">${IC.check}<span>你現在是<b>護理長</b>身分，可以修改備品數量。${TRIAL_NOTE}</span></div>
     <div class="fchips">${opts.map(o=>`<button class="${SF===o.id?'on':''}" data-act="sform" data-f="${o.id}">${o.short}</button>`).join('')}</div>
-    <div class="setlist">${rows}</div>
+    ${f.type==='cold'?`<p class="note setnote">冷藏藥點班時，<b>結存量要等於這裡設定的「結存量（正常數量）」</b>才算正常，預設 1；使用量 0 也正常。</p>`:''}
+    ${itemAddHTML(f)}
+    <div class="setlist">${rows||'<p class="empty">這張表目前沒有品項。</p>'}</div>
+    ${hiddenHTML(f)}
     <div class="sec">修改紀錄</div>${log}
     ${nursesSetHTML()}
     <div class="sec">點班位置 QR 碼貼紙</div>
@@ -620,6 +659,82 @@ function settingsView(){
     <div class="qrsheet" id="qrsheet">${QRHTML}</div>
     ${ownerView()}`;
 }
+/* ===== 品項新增／刪除（護理長）：存雲端 settings/items，大家的點班表馬上同步 ===== */
+const IMAX=40;
+let IDEL=null;   // 按過一次「刪除」、等待確認的品項（表單:代號）
+/* 設定頁每一列：左邊名稱、右邊刪除鈕，下面是數量欄 */
+function setRow(f,i,nameHTML,parts){
+  const key=itemKey(f.id,i);
+  const del=IDEL===key
+    ?`<span class="idelc"><button class="nyes" data-act="item-del-yes" data-f="${f.id}" data-i="${i}">確定刪除</button><button class="nno" data-act="item-del-no">取消</button></span>`
+    :`<button class="idel" data-act="item-del" data-f="${f.id}" data-i="${i}">刪除</button>`;
+  return `<div class="setrow"><div class="nm nmrow"><span>${nameHTML}</span>${del}</div>${parts?`<div class="setparts">${parts}</div>`:''}</div>`;
+}
+/* 新增品項的那一列：每種表要填的欄位不同 */
+function itemAddHTML(f){
+  const inp=(id,ph,extra)=>`<input class="field" id="${id}" placeholder="${ph}" autocomplete="off" ${extra||''}>`;
+  // 數字格有預設值，提示字會被蓋掉，所以外面包一個標題
+  const num=(id,ph,v)=>`<label class="ianum" for="${id}"><span>${ph}</span><input class="field" id="${id}" type="number" min="0" inputmode="numeric" value="${v}"></label>`;
+  let fields='';
+  if(f.type==='count') fields=`<select class="field" id="ia-g" aria-label="位置">${f.groups.map(g=>`<option>${esc(g.pos)}</option>`).join('')}</select>`
+    +inp('ia-n','品項名稱（必填）',`maxlength="${IMAX}"`)+num('ia-b','基本量',1);
+  if(f.type==='cold') fields=inp('ia-n','藥名（必填）',`maxlength="${IMAX}"`)+inp('ia-spec','規格，例：100u/ml','maxlength="30"')
+    +num('ia-b','基本量',1)+num('ia-s','結存量（正常數量）',COLD_STOCK_DEF);
+  if(f.type==='ctrl') fields=inp('ia-n','藥名（必填）',`maxlength="${IMAX}"`)+inp('ia-spec','規格，例：5mg/Amp','maxlength="30"')+num('ia-b','常備量',1);
+  if(f.type==='check') fields=inp('ia-n','查核題目（必填）',`maxlength="${IMAX*2}"`);
+  return `<div class="iadd"><div class="iadd-t">新增${f.type==='check'?'題目':f.type==='count'?'品項':'藥品'}到「${f.name}」</div>
+    <div class="iadd-f">${fields}<button class="submit" data-act="item-add">新增</button></div></div>`;
+}
+/* 刪掉的內建品項列在最下面，按「復原」就回來 */
+function hiddenHTML(f){
+  const list=hiddenItems(f.id,S.items); if(!list.length)return '';
+  return `<div class="hiddenlist"><b>已刪除的品項</b>${list.map(x=>`<span>${esc(x.n)}<button class="linkbtn" data-act="item-restore" data-f="${f.id}" data-i="${x.i}">復原</button></span>`).join('')}</div>`;
+}
+function itemNames(f){return f.type==='count'?f.flat.map(x=>x.n):f.type==='check'?f.qs.slice():f.drugs.map(g=>g.n);}
+function itemCount(f){return itemNames(f).length;}
+/* 修改紀錄：數量改了寫「從幾改成幾」，新增刪除寫動作 */
+function logLi(l){
+  if(l.act)return `<li>${l.t}　${esc(l.who)} ${esc(l.act)} <b>${esc(l.l)}</b></li>`;
+  return `<li>${l.t}　${esc(l.who)} 把 <b>${esc(l.l)}</b> 從 <span class="num">${l.from}</span> 改成 <span class="num">${l.to}</span></li>`;
+}
+function logItem(f,act,name){
+  S.baseLog.push({t:`${md(ymd(new Date()))} ${hm(new Date())}`,who:(S.nurse||'未選名字')+'（護理長）',l:`${f.short}・${name}`,act});
+  persistBase();
+}
+/* 存品項清單：先存雲端，成功才改畫面，失敗不會留下看似成功的假畫面 */
+async function commitItems(cfg,ok){
+  try{await saveItems(cfg); S.items=cfg; ITEMS_PENDING=true; IDEL=null; render(); ok();}
+  catch(e){toast('沒有存成功，請檢查網路再按一次');}
+}
+function addItem(){
+  if(!isHead()){toast('只有護理長能新增品項');return;}
+  const f=FM[SF], val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  const num=(id,def)=>{const v=val(id);return v===''?def:Math.max(0,parseInt(v,10)||0);};
+  const n=val('ia-n');
+  if(!n){toast('名稱不能空白');return;}
+  if(itemNames(f).includes(n)){toast(`「${n}」已經在這張表裡了`);return;}
+  const i=Math.max(ADD_FROM-1,...S.items.add.map(a=>a.i))+1;
+  const a={f:f.id,i,n:n.slice(0,f.type==='check'?IMAX*2:IMAX)};
+  if(f.type==='count'){a.g=val('ia-g'); a.b=num('ia-b',1);}
+  if(f.type==='cold'||f.type==='ctrl'){a.spec=val('ia-spec').slice(0,30); a.b=num('ia-b',1);}
+  // 冷藏藥的結存量不是 1 才另外存，跟一般基本量放在一起
+  if(f.type==='cold'){const s=num('ia-s',COLD_STOCK_DEF); if(s!==COLD_STOCK_DEF)S.base[`cold:${i}:s`]=s;}
+  commitItems({hide:S.items.hide.slice(),add:S.items.add.concat(a)},()=>{logItem(f,'新增',a.n); toast(`已新增：${a.n}`);});
+}
+function delItem(fid,i){
+  const f=FM[fid], key=itemKey(fid,i);
+  if(itemCount(f)<=1){toast('每張表至少要留一項');IDEL=null;render();return;}
+  const name=f.type==='count'?itemOf(f,i).n:f.type==='check'?f.qs[f.qsI.indexOf(+i)]:drugOf(f,i).n;
+  const cfg=+i>=ADD_FROM
+    ?{hide:S.items.hide.slice(),add:S.items.add.filter(a=>!(a.f===fid&&a.i===+i))}
+    :{hide:S.items.hide.concat(key),add:S.items.add.slice()};
+  commitItems(cfg,()=>{logItem(f,'刪除',name); toast(`已刪除：${name}（以前的點班紀錄會保留）`);});
+}
+function restoreItem(fid,i){
+  const f=FM[fid], key=itemKey(fid,i), x=hiddenItems(fid,S.items).find(v=>v.i===+i);
+  commitItems({hide:S.items.hide.filter(k=>k!==key),add:S.items.add.slice()},()=>{logItem(f,'復原',x?x.n:''); toast(`已復原：${x?x.n:''}`);});
+}
+
 /* ===== 點班人員名單（護理長）：新增、改名、移除，存雲端，大家的「選點班人」馬上同步 ===== */
 const NMAX=20;
 let NDEL=null;   // 按過一次「移除」、等待確認的那一位
@@ -693,11 +808,12 @@ function setInput(fid,i,k,p){
 function changeBase(el){
   if(!isHead()){toast('只有護理長能改基本量，請先切換成護理長');render();return;}
   const key=el.dataset.base, [fid,i,k]=key.split(':'), def=Number(el.dataset.def);
-  const to=Math.max(0,parseInt(el.value,10)||0), from=baseOf(fid,+i,+k,def);
+  // 代號、欄位照字串用（冷藏藥結存量的欄位是 's'），跟 baseOf 組出來的鍵一模一樣
+  const to=Math.max(0,parseInt(el.value,10)||0), from=baseOf(fid,i,k,def);
   if(to===from)return;
   if(to===def)delete S.base[key]; else S.base[key]=to;
-  const f=FM[fid];
-  let l=f.type==='count'?f.flat[i].n+(f.flat[i].p[k].l?'・'+f.flat[i].p[k].l:''):f.type==='cold'?f.drugs[i].n:f.drug.n;
+  const f=FM[fid], x=f.type==='count'?itemOf(f,i):null, g=x?null:drugOf(f,i);
+  let l=x?x.n+(x.p[k].l?'・'+x.p[k].l:''):g?g.n+(f.type==='cold'?(k==='s'?'・結存量':'・基本量'):'・常備量'):'';
   S.baseLog.push({t:`${md(ymd(new Date()))} ${hm(new Date())}`,who:(S.nurse||'未選名字')+'（護理長）',l:`${f.short}・${l}`,from,to});
   persistBase(); render(); toast(`已更新基本量：${l} → ${to}`);
 }
@@ -767,11 +883,11 @@ const ACT={
   back:()=>{leaveForm();D=null;render();},
   pick:()=>openPicker(()=>render()),
   ok:b=>{const f=FM[D.f],i=+b.dataset.i; D.flag=null;
-    if(f.type==='count'){D.x[i]={mode:'ok',v:partBases(f,f.flat[i]),r:'',note:''};}
-    if(f.type==='cold'){const dx=D.x[i];dx.mode='ok';dx.in=0;dx.stock=baseOf('cold',i,0,f.drugs[i].b);dx.r='';dx.note='';}
+    if(f.type==='count'){D.x[i]={mode:'ok',v:partBases(f,itemOf(f,i)),r:'',note:''};}
+    if(f.type==='cold'){const dx=D.x[i];dx.mode='ok';dx.in=0;dx.use=0;dx.stock=coldStock(f.drugs[i]);dx.r='';dx.note='';}
     rerenderItem(i);},
   edit:b=>{const f=FM[D.f],i=+b.dataset.i; D.flag=null;
-    if(f.type==='count'){const cur=D.x[i];D.x[i]={mode:'edit',v:cur&&cur.v?cur.v.slice():partBases(f,f.flat[i]),r:cur?cur.r:'',note:cur?cur.note:''};}
+    if(f.type==='count'){const cur=D.x[i];D.x[i]={mode:'edit',v:cur&&cur.v?cur.v.slice():partBases(f,itemOf(f,i)),r:cur?cur.r:'',note:cur?cur.note:''};}
     if(f.type==='cold')D.x[i].mode='edit';
     rerenderItem(i);},
   step:b=>{const f=FM[D.f],i=+b.dataset.i,k=b.dataset.k,dir=+b.dataset.dir;
@@ -781,18 +897,18 @@ const ACT={
   tog:b=>{D.x[+b.dataset.i].v[+b.dataset.k]=b.dataset.v;rerenderItem(+b.dataset.i);},
   reason:b=>{const dx=D.x[+b.dataset.i];dx.r=dx.r===b.dataset.r?'':b.dataset.r;rerenderItem(+b.dataset.i);},
   chk:b=>{const i=+b.dataset.i;D.flag=null;D.x[i]={v:b.dataset.v==='1',note:(D.x[i]||{}).note||''};rerenderItem(i);},
-  cfm:()=>{D.x[0].ok=!D.x[0].ok;D.flag=null;rerenderItem(0);},
+  cfm:b=>{const k=+b.dataset.i;D.x[k].ok=!D.x[k].ok;D.flag=null;rerenderItem(k);},
   allok:()=>{const f=FM[D.f];D.flag=null;
     if(f.type==='count')visItems(f,D.s).forEach(x=>{if(!D.x[x.i]||!D.x[x.i].mode)D.x[x.i]={mode:'ok',v:partBases(f,x),r:'',note:''};});
     if(f.type==='check')f.qs.forEach((q,i)=>{if(!D.x[i]||D.x[i].v===undefined)D.x[i]={v:true,note:''};});
-    if(f.type==='cold')f.drugs.forEach((g,i)=>{const dx=D.x[i];if(!dx.mode){dx.mode='ok';dx.in=0;dx.stock=baseOf('cold',i,0,g.b);}});
+    if(f.type==='cold')f.drugs.forEach((g,i)=>{const dx=D.x[i];if(!dx.mode){dx.mode='ok';dx.in=0;dx.use=0;dx.stock=coldStock(g);}});
     render(); toast('沒點過的項目都設成符合，有不對的再個別改');},
   submit:()=>submitForm(),
   flt:b=>{O.flt=b.dataset.f;O.sel=null;render();},
   cell:b=>{ if(O.flt==='all'){O.flt=b.dataset.f;O.sel={d:b.dataset.d,f:b.dataset.f,s:null};}
     else O.sel={d:b.dataset.d,f:b.dataset.f,s:b.dataset.s||null};
     render(); const p=document.querySelector('.panel'); if(p)p.scrollIntoView({behavior:'smooth',block:'nearest'}); },
-  sform:b=>{SF=b.dataset.f;render();},
+  sform:b=>{SF=b.dataset.f;IDEL=null;render();},
   reset:()=>{RESET=true;render();},
   'reset-no':()=>{RESET=false;render();},
   'reset-yes':async()=>{RESET=false;render();toast('正在清掉重來…');
@@ -812,6 +928,11 @@ const ACT={
     if(!FLOOR.edit)toast('位置已儲存');},
   'floor-zoom':()=>{FLOOR.zoom=!FLOOR.zoom; render();},
   'floor-reset':()=>{S.pos={}; render(); saveFloor({}).then(()=>toast('已恢復預設位置')).catch(()=>toast('沒有存成功，請檢查網路'));},
+  'item-add':()=>addItem(),
+  'item-del':b=>{if(!isHead()){toast('只有護理長能刪除品項');return;} IDEL=itemKey(b.dataset.f,b.dataset.i);render();},
+  'item-del-no':()=>{IDEL=null;render();},
+  'item-del-yes':b=>delItem(b.dataset.f,b.dataset.i),
+  'item-restore':b=>{if(!isHead()){toast('只有護理長能復原品項');return;} restoreItem(b.dataset.f,b.dataset.i);},
   'nurse-add':()=>addNurse(),
   'nurse-del':b=>{NDEL=b.dataset.id;render();},
   'nurse-del-no':()=>{NDEL=null;render();},
@@ -842,6 +963,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!document.getElementById('scanner').hidden)closeScanner();
   if(e.key==='Enter'&&e.target.id==='nq'){const f=document.querySelector('#nlist [data-nurse]');if(f)f.click();}
   if(e.key==='Enter'&&(e.target.id==='na-n'||e.target.id==='na-t'))addNurse();
+  if(e.key==='Enter'&&/^ia-/.test(e.target.id))addItem();
   if(e.key==='Enter'&&e.target.dataset.nid)e.target.blur();
 });
 
